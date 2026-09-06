@@ -16,23 +16,46 @@ def upload_to_catbox(video_path: str, timeout: int = 180) -> str:
     filename = os.path.basename(video_path)
     print(f"[BufferService] Đang tải video '{filename}' ({os.path.getsize(video_path):,} bytes) lên máy chủ trung chuyển (0đ)...")
 
-    with open(video_path, "rb") as f:
-        resp = requests.post(
-            CATBOX_API_ENDPOINT,
-            data={"reqtype": "fileupload"},
-            files={"fileToUpload": (filename, f, "video/mp4")},
-            timeout=timeout
-        )
+    USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    headers = {"User-Agent": USER_AGENT}
 
-    if resp.status_code != 200:
-        raise RuntimeError(f"Catbox upload thất bại ({resp.status_code}): {resp.text}")
+    # 1. Thử Catbox
+    try:
+        with open(video_path, "rb") as f:
+            resp = requests.post(
+                CATBOX_API_ENDPOINT,
+                data={"reqtype": "fileupload"},
+                files={"fileToUpload": (filename, f, "video/mp4")},
+                headers=headers,
+                timeout=timeout
+            )
+        if resp.status_code == 200 and resp.text.strip().startswith("http"):
+            direct_url = resp.text.strip()
+            print(f"[BufferService] Direct Video URL (Catbox): {direct_url}")
+            return direct_url
+        print(f"[BufferService] Catbox phản hồi ({resp.status_code}): {resp.text.strip()}. Chuyển sang cổng phụ Uguu...")
+    except Exception as ce:
+        print(f"[BufferService] Catbox error: {ce}. Chuyển sang Uguu...")
 
-    direct_url = resp.text.strip()
-    if not direct_url.startswith("http"):
-        raise RuntimeError(f"Catbox phản hồi không hợp lệ: {direct_url}")
+    # 2. Cổng dự phòng Uguu.se (Miễn phí, Direct link .mp4, hỗ trợ máy chủ Linux)
+    try:
+        with open(video_path, "rb") as f:
+            resp = requests.post(
+                "https://uguu.se/upload",
+                files={"files[]": (filename, f, "video/mp4")},
+                headers=headers,
+                timeout=timeout
+            )
+        if resp.status_code == 200:
+            res_data = resp.json()
+            if res_data.get("success") and res_data.get("files"):
+                direct_url = res_data["files"][0]["url"]
+                print(f"[BufferService] Direct Video URL (Uguu): {direct_url}")
+                return direct_url
+    except Exception as ue:
+        print(f"[BufferService] Uguu error: {ue}")
 
-    print(f"[BufferService] Direct Video URL: {direct_url}")
-    return direct_url
+    raise RuntimeError("Không thể tải video lên máy chủ trung chuyển. Vui lòng kiểm tra lại kết nối mạng.")
 
 def get_connected_tiktok_channels(access_token: str) -> List[Dict[str, str]]:
     """
