@@ -277,12 +277,12 @@ CẤU TRÚC JSON ĐẦU RA BẮT BUỘC:
   "item_a": {
     "name": "Tên ngắn gọn đối tượng A",
     "search_query": "Từ khóa tìm ảnh tiếng Việt",
-    "search_query_en": "Specific concise English visual description for image search (e.g. 'hot sunny Sahara desert dunes landscape photo', 'iPhone 15 Pro Max blue titanium', 'golden retriever dog portrait')"
+    "search_query_en": "Clear international English visual description for image search and AI image generation (e.g. 'vietnamese iced milk coffee glass cup', 'pearl milk tea cup with boba', 'iPhone 15 Pro Max blue titanium', 'golden retriever dog portrait')"
   },
   "item_b": {
     "name": "Tên ngắn gọn đối tượng B",
     "search_query": "Từ khóa tìm ảnh tiếng Việt",
-    "search_query_en": "Specific concise English visual description for image search (e.g. 'Sahara desert cold starry night dunes landscape photo', 'Samsung Galaxy S24 Ultra titanium gray', 'poodle dog portrait')"
+    "search_query_en": "Clear international English visual description for image search and AI image generation (e.g. 'vietnamese salted cream coffee glass cup', 'fruit tea drink with peach slices', 'Samsung Galaxy S24 Ultra titanium gray', 'poodle dog portrait')"
   },
   "segments": [
     {

@@ -39,6 +39,12 @@ def clean_query_variations(query: str, display_name: str = "", query_en: str = "
         clean_en = re.sub(r"\s+", " ", clean_en)
         if clean_en and clean_en not in variations:
             variations.append(clean_en)
+        # Broaden English query: if it has 3+ words, also add the core 2 words
+        words = clean_en.split()
+        if len(words) >= 3:
+            simplified = " ".join(words[:2])
+            if simplified not in variations:
+                variations.append(simplified)
             
     # 2. Clean display name
     if display_name:
@@ -62,12 +68,12 @@ def is_valid_image(img: Image.Image) -> bool:
     """Check if image is not corrupted, blank, or monochromatic placeholder."""
     try:
         w, h = img.size
-        if w < 100 or h < 100:
+        if w < 80 or h < 80:
             return False
         stat = ImageStat.Stat(img.convert("RGB"))
-        # Check standard deviation: if too close to 0, it's a solid/blank color (all white or all black)
+        # Check standard deviation: lowered to 3.0 to allow dark/monochromatic real photos (coffee, night sky, sleek electronics)
         avg_stddev = sum(stat.stddev) / len(stat.stddev)
-        if avg_stddev < 8.0:
+        if avg_stddev < 3.0:
             return False
         return True
     except Exception:
@@ -137,47 +143,49 @@ def search_wikimedia_image(query: str) -> Optional[bytes]:
                     img_url = info.get("url")
                     mime = info.get("mime", "")
                     size = info.get("size", 0)
-                    if img_url and ("jpeg" in mime or "png" in mime or "webp" in mime or "jpg" in mime) and size > 15000:
+                    if img_url and ("jpeg" in mime or "png" in mime or "webp" in mime or "jpg" in mime) and size > 8000:
                         img_resp = requests.get(img_url, headers=headers, timeout=8)
-                        if img_resp.status_code == 200 and len(img_resp.content) > 10000:
+                        if img_resp.status_code == 200 and len(img_resp.content) > 5000:
                             return img_resp.content
-    except Exception as ex:
+    except Exception:
         pass
     return None
 
 def search_wikipedia_image(query: str) -> Optional[bytes]:
-    """Secondary image engine: Wikipedia Direct PageImages API."""
-    try:
-        clean_q = re.sub(r"[^\w\s]", " ", query).strip()
-        url = f"https://en.wikipedia.org/w/api.php?action=query&titles={urllib.parse.quote(clean_q)}&prop=pageimages&format=json&pithumbsize=600"
-        headers = {"User-Agent": USER_AGENT}
-        resp = requests.get(url, headers=headers, timeout=6)
-        if resp.status_code == 200:
-            pages = resp.json().get("query", {}).get("pages", {})
-            for pid, pdata in pages.items():
-                thumb = pdata.get("thumbnail", {}).get("source")
-                if thumb:
-                    img_resp = requests.get(thumb, headers=headers, timeout=8)
-                    if img_resp.status_code == 200 and len(img_resp.content) > 5000:
-                        return img_resp.content
-    except Exception:
-        pass
+    """Secondary image engine: Wikipedia Direct PageImages API (both en & vi)."""
+    for lang in ["en", "vi"]:
+        try:
+            clean_q = re.sub(r"[^\w\s]", " ", query).strip()
+            url = f"https://{lang}.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(clean_q)}&gsrlimit=3&prop=pageimages&pithumbsize=600&format=json"
+            headers = {"User-Agent": USER_AGENT}
+            resp = requests.get(url, headers=headers, timeout=6)
+            if resp.status_code == 200:
+                pages = resp.json().get("query", {}).get("pages", {})
+                for pid, pdata in pages.items():
+                    thumb = pdata.get("thumbnail", {}).get("source")
+                    if thumb:
+                        img_resp = requests.get(thumb, headers=headers, timeout=8)
+                        if img_resp.status_code == 200 and len(img_resp.content) > 4000:
+                            return img_resp.content
+        except Exception:
+            pass
     return None
 
 def generate_pollinations_image(query: str, query_en: str = "") -> Optional[bytes]:
     """Tertiary engine: Pollinations.ai High-Res Image (100% Free, No Key, Datacenter-friendly)."""
     target = query_en if query_en else query
     prompts_to_try = [
-        f"hyperrealistic cinematic photo of {target}, vibrant lighting, 8k resolution, photorealistic",
-        f"detailed studio photo of {target}, clear subject, beautiful colors, highly detailed"
+        f"hyperrealistic studio photo of {target}, vibrant lighting, 8k resolution, photorealistic",
+        f"high quality clear photo of {target}, centered, realistic colors",
+        f"{target}, professional product photography"
     ]
     for prompt_text in prompts_to_try:
         try:
             clean_prompt = urllib.parse.quote(prompt_text)
-            url = f"https://image.pollinations.ai/prompt/{clean_prompt}?width=480&height=480&nologo=true&seed={abs(hash(target)) % 99999}"
+            url = f"https://image.pollinations.ai/prompt/{clean_prompt}?width=480&height=480&nologo=true&seed={abs(hash(prompt_text)) % 99999}"
             headers = {"User-Agent": USER_AGENT}
-            resp = requests.get(url, headers=headers, timeout=18)
-            if resp.status_code == 200 and len(resp.content) > 6000:
+            resp = requests.get(url, headers=headers, timeout=22)
+            if resp.status_code == 200 and len(resp.content) > 5000:
                 return resp.content
         except Exception as ex:
             print(f"[ImageService] Pollinations AI attempt error: {ex}")
@@ -274,6 +282,29 @@ def create_graphic_placeholder_card(display_name: str, output_path: str, border_
     card.save(output_path, "PNG")
     return output_path
 
+def search_unsplash_image(query: str) -> Optional[bytes]:
+    """High-speed Stock CDN fallback: Unsplash Public Source (free, instant, high aesthetic)."""
+    try:
+        clean_q = re.sub(r"[^\w\s]", " ", query).strip()
+        encoded = urllib.parse.quote(clean_q)
+        url = f"https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=480&h=480&fit=crop" # Default fallback
+        # Search unsplash direct page
+        search_url = f"https://unsplash.com/napi/search/photos?query={encoded}&per_page=3&page=1"
+        headers = {"User-Agent": USER_AGENT}
+        resp = requests.get(search_url, headers=headers, timeout=6)
+        if resp.status_code == 200:
+            data = resp.json()
+            results = data.get("results", [])
+            for r in results:
+                raw_url = r.get("urls", {}).get("small") or r.get("urls", {}).get("regular")
+                if raw_url:
+                    img_resp = requests.get(raw_url, headers=headers, timeout=8)
+                    if img_resp.status_code == 200 and len(img_resp.content) > 5000:
+                        return img_resp.content
+    except Exception:
+        pass
+    return None
+
 def search_and_download_image(
     query: str,
     output_path: str,
@@ -348,8 +379,22 @@ def search_and_download_image(
             print(f"[ImageService] Tạo ảnh AI thành công cho '{target_label}': {output_path}")
             return output_path
 
-    # Tier 4: Fallback Graphic Card (Bảo đảm tiến trình 100% không bao giờ crash)
-    print(f"[ImageService] [Tier 4 Card] Tạo thẻ đồ họa cao cấp cho: '{target_label}'")
+    # Tier 4: Unsplash CDN High-Res Stock Search
+    print(f"[ImageService] [Tier 4 Unsplash] Đang tìm ảnh kho Unsplash cho: '{target_label}'...")
+    for q_var in variations:
+        unsplash_bytes = search_unsplash_image(q_var)
+        if unsplash_bytes:
+            if process_and_crop_square(
+                unsplash_bytes,
+                output_path,
+                target_size=(480, 480),
+                border_color=border_color
+            ):
+                print(f"[ImageService] Tải thành công qua Unsplash cho '{q_var}': {output_path}")
+                return output_path
+
+    # Tier 5: Fallback Graphic Card (Bảo đảm tiến trình 100% không bao giờ crash)
+    print(f"[ImageService] [Tier 5 Card] Tạo thẻ đồ họa cao cấp cho: '{target_label}'")
     create_graphic_placeholder_card(target_label, output_path, border_color)
     return output_path
 
