@@ -49,6 +49,26 @@ def cleanup_temp_folder():
 
 # Phân bổ ngách chủ đề chuyên biệt cho từng kênh TikTok
 CHANNEL_NICHE_MAP = {
+    # Nhóm kênh mới:
+    "tramsuyngam.hehe": [
+        "🧪 Lầm Tưởng Đời Sống & Sự Thật Khoa Học",
+        "📜 Bí Ẩn Lịch Sử & Lầm Tưởng Cổ Nhân",
+        "🌍 Nghịch Lý Địa Lý & Văn Hóa Thế Giới",
+        "🎭 Tâm Lý Học Hành Vi & Bẫy Cảm Xúc"
+    ],
+    "hoanghaxyz": [
+        "💳 Thói Quen Tiêu Dùng & Quản Lý Tiền Bạc",
+        "💰 Quyết Định Tài Chính & Đầu Tư Lớn",
+        "🏢 Tranh Cãi Công Sở & Tư Duy Đi Làm",
+        "📱 Công nghệ & Thiết bị Điện tử"
+    ],
+    "jemniferr": [
+        "🍜 Ẩm thực & Món ăn Đặc sản",
+        "🥑 Tranh Luận Dinh Dưỡng & Ăn Uống Lành Mạnh",
+        "🐾 Thú Cưng: Nuôi Dạy & So Sánh Giống Loài",
+        "🐕 Giải Mã Hành Vi Thú Cưng & Bí Ẩn Động Vật"
+    ],
+    # Nhóm kênh cũ (backward compatibility):
     "meothongthai.hehe": [
         "🧪 Lầm Tưởng Đời Sống & Sự Thật Khoa Học",
         "📜 Bí Ẩn Lịch Sử & Lầm Tưởng Cổ Nhân",
