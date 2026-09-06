@@ -130,7 +130,7 @@ def search_wikimedia_image(query: str) -> Optional[bytes]:
     """Secondary image engine: Wikimedia Commons API with namespace 6 (Files only)."""
     try:
         clean_q = re.sub(r"[^\w\s]", " ", query).strip()
-        url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(clean_q)}&gsrnamespace=6&gsrlimit=6&prop=imageinfo&iiprop=url|mime|size&format=json"
+        url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(clean_q)}&gsrnamespace=6&gsrlimit=5&prop=imageinfo&iiprop=url|mime|size&format=json"
         headers = {"User-Agent": USER_AGENT}
         resp = requests.get(url, headers=headers, timeout=6)
         if resp.status_code == 200:
@@ -152,11 +152,12 @@ def search_wikimedia_image(query: str) -> Optional[bytes]:
     return None
 
 def search_wikipedia_image(query: str) -> Optional[bytes]:
-    """Secondary image engine: Wikipedia Direct PageImages API (both en & vi)."""
+    """Secondary image engine: Wikipedia Direct PageImages API (both en & vi) with redirect resolution."""
     for lang in ["en", "vi"]:
         try:
             clean_q = re.sub(r"[^\w\s]", " ", query).strip()
-            url = f"https://{lang}.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(clean_q)}&gsrlimit=3&prop=pageimages&pithumbsize=600&format=json"
+            # 1. PageImages with redirects
+            url = f"https://{lang}.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(clean_q)}&gsrlimit=3&redirects=1&prop=pageimages&pithumbsize=600&format=json"
             headers = {"User-Agent": USER_AGENT}
             resp = requests.get(url, headers=headers, timeout=6)
             if resp.status_code == 200:
@@ -169,6 +170,25 @@ def search_wikipedia_image(query: str) -> Optional[bytes]:
                             return img_resp.content
         except Exception:
             pass
+    return None
+
+def search_openverse_image(query: str) -> Optional[bytes]:
+    """Openverse API (Over 700 million verified Creative Commons photos)."""
+    try:
+        clean_q = re.sub(r"[^\w\s]", " ", query).strip()
+        url = f"https://api.openverse.org/v1/images/?q={urllib.parse.quote(clean_q)}&page_size=4"
+        headers = {"User-Agent": USER_AGENT}
+        resp = requests.get(url, headers=headers, timeout=6)
+        if resp.status_code == 200:
+            results = resp.json().get("results", [])
+            for item in results:
+                raw_url = item.get("url")
+                if raw_url and any(ext in raw_url.lower() for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+                    img_resp = requests.get(raw_url, headers=headers, timeout=8)
+                    if img_resp.status_code == 200 and len(img_resp.content) > 5000:
+                        return img_resp.content
+    except Exception:
+        pass
     return None
 
 def generate_pollinations_image(query: str, query_en: str = "") -> Optional[bytes]:
@@ -366,8 +386,22 @@ def search_and_download_image(
                 print(f"[ImageService] Tải thành công qua Wiki Engine cho '{q_var}': {output_path}")
                 return output_path
 
-    # Tier 3: Pollinations AI Image Synthesis (Tạo ảnh siêu nét, không bao giờ để trống)
-    print(f"[ImageService] [Tier 3 AI Studio] Đang tạo hình ảnh minh họa cho: '{target_label}'...")
+    # Tier 3: Openverse Global API (Kho hơn 700 triệu ảnh chụp thật có cấp phép Creative Commons)
+    print(f"[ImageService] [Tier 3 Openverse] Đang tìm ảnh kho mở toàn cầu cho: '{target_label}'...")
+    for q_var in variations:
+        ov_bytes = search_openverse_image(q_var)
+        if ov_bytes:
+            if process_and_crop_square(
+                ov_bytes,
+                output_path,
+                target_size=(480, 480),
+                border_color=border_color
+            ):
+                print(f"[ImageService] Tải thành công qua Openverse cho '{q_var}': {output_path}")
+                return output_path
+
+    # Tier 4: Pollinations AI Image Synthesis (Tạo ảnh siêu nét, hỗ trợ chủ đề hiếm)
+    print(f"[ImageService] [Tier 4 AI Studio] Đang tạo hình ảnh minh họa cho: '{target_label}'...")
     ai_img_bytes = generate_pollinations_image(target_label, query_en=query_en)
     if ai_img_bytes:
         if process_and_crop_square(
@@ -378,20 +412,6 @@ def search_and_download_image(
         ):
             print(f"[ImageService] Tạo ảnh AI thành công cho '{target_label}': {output_path}")
             return output_path
-
-    # Tier 4: Unsplash CDN High-Res Stock Search
-    print(f"[ImageService] [Tier 4 Unsplash] Đang tìm ảnh kho Unsplash cho: '{target_label}'...")
-    for q_var in variations:
-        unsplash_bytes = search_unsplash_image(q_var)
-        if unsplash_bytes:
-            if process_and_crop_square(
-                unsplash_bytes,
-                output_path,
-                target_size=(480, 480),
-                border_color=border_color
-            ):
-                print(f"[ImageService] Tải thành công qua Unsplash cho '{q_var}': {output_path}")
-                return output_path
 
     # Tier 5: Fallback Graphic Card (Bảo đảm tiến trình 100% không bao giờ crash)
     print(f"[ImageService] [Tier 5 Card] Tạo thẻ đồ họa cao cấp cho: '{target_label}'")
