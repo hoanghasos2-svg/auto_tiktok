@@ -36,7 +36,7 @@ TEMP_DIR = BASE_DIR / "temp"
 
 WIDTH = 1080
 HEIGHT = 1920
-FPS = 15
+FPS = 25
 
 def set_clip_start(clip, t: float):
     return clip.with_start(t) if hasattr(clip, 'with_start') else clip.set_start(t)
@@ -414,7 +414,7 @@ class VideoComposer:
         audio = self.build_audio_track()
         video = set_video_audio(video, audio)
         
-        self.progress_callback(0.25, "Đang mã hóa và xuất video 1080x1920 15FPS...")
+        self.progress_callback(0.25, "Đang mã hóa và xuất video 1080x1920 25FPS...")
         
         video.write_videofile(
             self.output_video_path,
