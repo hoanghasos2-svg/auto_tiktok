@@ -107,18 +107,15 @@ def get_used_count(category: Optional[str] = None) -> int:
     return sum(1 for s in used if s.get("category") == category)
 
 def get_used_titles(category: Optional[str] = None) -> List[str]:
+    """Lấy danh sách tiêu đề đã làm TOÀN CỤC trên toàn bộ hệ thống để chống trùng 100%."""
     used = _load_used_history()
-    if not category:
-        return [s.get("title", "").strip() for s in used if s.get("title")]
-    return [s.get("title", "").strip() for s in used if s.get("category") == category and s.get("title")]
+    return [s.get("title", "").strip() for s in used if s.get("title")]
 
 def get_used_pairs(category: Optional[str] = None) -> List[str]:
-    """Get list of already compared product pairs, e.g. 'iPhone vs Samsung'."""
+    """Lấy danh sách các cặp đối đầu TOÀN CỤC đã làm, không phân biệt thể loại hay kênh."""
     used = _load_used_history()
     pairs = []
     for s in used:
-        if category and s.get("category") != category:
-            continue
         a = s.get("item_a", "")
         b = s.get("item_b", "")
         if isinstance(a, dict):
@@ -129,29 +126,60 @@ def get_used_pairs(category: Optional[str] = None) -> List[str]:
             pairs.append(f"{a} vs {b}")
     return pairs
 
+def extract_keywords(text: str) -> set:
+    """Tách từ khóa cốt lõi để so sánh ngữ nghĩa và chống trùng lặp biến thể."""
+    clean = re.sub(r"[^\w\s]", " ", text.lower())
+    stop_words = {"vs", "và", "với", "hay", "hoặc", "cho", "của", "là", "các", "những", "sự", "thật", "bí", "mật", "đỉnh", "hơn", "nhất", "thế", "nào"}
+    words = {w for w in clean.split() if len(w) > 1 and w not in stop_words}
+    return words
+
 def is_duplicate(title: str, name_a: str, name_b: str, category: Optional[str] = None) -> bool:
-    """Check if title or the exact pair was already produced in history."""
+    """
+    Kiểm tra trùng lặp TOÀN CỤC tuyệt đối:
+    1. Trùng khớp tiêu đề chính xác hoặc tiêu đề con.
+    2. Trùng cặp đối đầu (A vs B hoặc B vs A).
+    3. Trùng ngữ nghĩa cốt lõi (Keyword Jaccard overlap > 60%).
+    """
     used = _load_used_history()
     clean_title = title.strip().lower()
-    pair_str_1 = f"{name_a.strip().lower()} vs {name_b.strip().lower()}"
-    pair_str_2 = f"{name_b.strip().lower()} vs {name_a.strip().lower()}"
     
+    clean_a = name_a.strip().lower()
+    clean_b = name_b.strip().lower()
+    pair_1 = f"{clean_a} vs {clean_b}"
+    pair_2 = f"{clean_b} vs {clean_a}"
+    kw_input = extract_keywords(f"{title} {name_a} {name_b}")
+
     for s in used:
-        if category and s.get("category") != category:
-            continue
+        # 1. Trùng tiêu đề
         u_title = s.get("title", "").strip().lower()
-        if clean_title == u_title:
+        if clean_title == u_title or (len(clean_title) > 6 and clean_title in u_title) or (len(u_title) > 6 and u_title in clean_title):
             return True
             
+        # 2. Trùng cặp đối tượng
         u_a = (s.get("item_a", "") if isinstance(s.get("item_a"), str) else s.get("item_a", {}).get("name", "")).strip().lower()
         u_b = (s.get("item_b", "") if isinstance(s.get("item_b"), str) else s.get("item_b", {}).get("name", "")).strip().lower()
         
         u_pair_1 = f"{u_a} vs {u_b}"
         u_pair_2 = f"{u_b} vs {u_a}"
         
-        if pair_str_1 == u_pair_1 or pair_str_1 == u_pair_2 or pair_str_2 == u_pair_1:
+        if pair_1 in (u_pair_1, u_pair_2) or pair_2 in (u_pair_1, u_pair_2):
             return True
             
+        # Trùng chéo đối tượng (ví dụ: cùng so sánh Nô lệ và Thợ xây)
+        if (clean_a and clean_a in u_a) and (clean_b and clean_b in u_b):
+            return True
+        if (clean_a and clean_a in u_b) and (clean_b and clean_b in u_a):
+            return True
+
+        # 3. Trùng từ khóa cốt lõi (Overlap matching)
+        kw_history = extract_keywords(f"{u_title} {u_a} {u_b}")
+        if kw_input and kw_history:
+            intersection = kw_input.intersection(kw_history)
+            union = kw_input.union(kw_history)
+            overlap_ratio = len(intersection) / len(union) if union else 0
+            if overlap_ratio >= 0.55 or (len(intersection) >= 3 and len(intersection) >= len(kw_input) * 0.6):
+                return True
+                
     return False
 
 def mark_script_as_used(script: Dict[str, Any], video_path: str, channel_id: str = "", channel_name: str = ""):

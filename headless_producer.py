@@ -102,8 +102,8 @@ def produce_single_video_for_channel(
     random.shuffle(niche_categories)
     selected_category = niche_categories[0]
 
-    used_titles = script_manager.get_used_titles(selected_category)
-    used_pairs = script_manager.get_used_pairs(selected_category)
+    used_titles = script_manager.get_used_titles()
+    used_pairs = script_manager.get_used_pairs()
 
     static_topics = gemini_service.TOPIC_CATEGORIES.get(selected_category, [])
     candidate_topic = None
@@ -111,7 +111,7 @@ def produce_single_video_for_channel(
         parts = top.split(" vs ")
         name_a = parts[0].strip() if len(parts) > 1 else top
         name_b = parts[1].strip() if len(parts) > 1 else "Bên B"
-        if not script_manager.is_duplicate(top, name_a, name_b, selected_category):
+        if not script_manager.is_duplicate(top, name_a, name_b):
             candidate_topic = top
             break
 
@@ -121,15 +121,31 @@ def produce_single_video_for_channel(
     else:
         print("-> Kho chủ đề tĩnh đã dùng hết. Kích hoạt Gemini AI sáng tạo chủ đề mới toanh!")
 
-    # Sinh kịch bản độc nhất vô nhị
-    script = gemini_service.generate_single_comparison_script(
-        category=selected_category,
-        specific_topic=candidate_topic,
-        used_titles=used_titles,
-        used_pairs=used_pairs,
-        api_key=gemini_key
-    )
-    script = script_manager.normalize_script_data(script)
+    # Vòng lặp bảo đảm không trùng lặp 100% (Strict Anti-Duplication Guard)
+    script = None
+    for attempt in range(1, 4):
+        raw_script = gemini_service.generate_single_comparison_script(
+            category=selected_category,
+            specific_topic=candidate_topic if attempt == 1 else None,
+            used_titles=used_titles,
+            used_pairs=used_pairs,
+            api_key=gemini_key
+        )
+        norm_script = script_manager.normalize_script_data(raw_script)
+        s_title = norm_script.get("title", "")
+        s_a = norm_script.get("item_a", {}).get("name", "")
+        s_b = norm_script.get("item_b", {}).get("name", "")
+
+        if not script_manager.is_duplicate(s_title, s_a, s_b):
+            script = norm_script
+            break
+        else:
+            print(f"[Cảnh báo trùng lặp lần {attempt}] Chủ đề '{s_title}' đã tồn tại trong lịch sử. Đang tạo chủ đề khác...")
+            candidate_topic = None  # Buộc Gemini tự tạo cặp đối tượng hoàn toàn mới
+
+    if not script:
+        script = norm_script  # Fallback nếu vượt quá số lần thử
+
     print(f"-> Tiêu đề kịch bản: {script['title']}")
     print(f"-> So sánh: {script['item_a']['name']} VS {script['item_b']['name']}")
 
