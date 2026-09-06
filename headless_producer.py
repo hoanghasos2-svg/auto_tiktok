@@ -108,16 +108,18 @@ def run_headless_pipeline():
     img_b_path = str(TEMP_DIR / "item_b_square.png")
 
     image_service.search_and_download_image(
-        script["item_a"]["search_query"],
+        script["item_a"].get("search_query", ""),
         img_a_path,
         item_label="A",
-        display_name=script["item_a"]["name"]
+        display_name=script["item_a"].get("name", ""),
+        query_en=script["item_a"].get("search_query_en", "")
     )
     image_service.search_and_download_image(
-        script["item_b"]["search_query"],
+        script["item_b"].get("search_query", ""),
         img_b_path,
         item_label="B",
-        display_name=script["item_b"]["name"]
+        display_name=script["item_b"].get("name", ""),
+        query_en=script["item_b"].get("search_query_en", "")
     )
 
     # 4. Sinh giọng đọc Edge-TTS
