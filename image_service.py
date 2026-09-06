@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Optional, List
 from PIL import Image, ImageDraw, ImageOps, ImageFilter, ImageFont
 
+BASE_DIR = Path(__file__).resolve().parent
+
 try:
     from ddgs import DDGS
     DDGS_AVAILABLE = True

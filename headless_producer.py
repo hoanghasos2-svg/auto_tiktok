@@ -184,23 +184,35 @@ def run_headless_pipeline():
 
                 caption = f"{script['title']}\n\nTheo bạn bên nào đỉnh hơn? Bình luận ngay nhé!\n#shorts #tiktok #sosanh #xuhuong #trending #fyp"
                 
-                # Tính toán thời gian phát hành ngẫu nhiên (lệch 12 - 50 phút và ngẫu nhiên từng giây)
-                from datetime import datetime, timedelta, timezone
-                rand_minutes = random.randint(12, 50)
-                rand_seconds = random.randint(0, 59)
-                rand_offset = timedelta(minutes=rand_minutes, seconds=rand_seconds)
-                scheduled_due_at = (datetime.now(timezone.utc) + rand_offset).strftime("%Y-%m-%dT%H:%M:%SZ")
-                print(f"[BufferService] 🎲 Đã tính mốc giờ đăng ngẫu nhiên: {scheduled_due_at} (Sau {rand_minutes} phút {rand_seconds} giây)")
+                # Nếu là lượt test ngay (TEST_NOW=true) thì đăng shareNow, ngược lại hẹn giờ ngẫu nhiên
+                is_test_now = os.environ.get("TEST_NOW", "").lower() in ("true", "1", "yes")
+                if is_test_now:
+                    print("[BufferService] ⚡ Chế độ TEST_NOW kích hoạt: Đăng ngay lập tức (shareNow)!")
+                    results = buffer_service.post_video_to_buffer_tiktok(
+                        access_token=buffer_token,
+                        channel_ids=ch_ids,
+                        video_url=public_video_url,
+                        caption=caption,
+                        mode="shareNow",
+                        due_at=None
+                    )
+                else:
+                    from datetime import datetime, timedelta, timezone
+                    rand_minutes = random.randint(12, 50)
+                    rand_seconds = random.randint(0, 59)
+                    rand_offset = timedelta(minutes=rand_minutes, seconds=rand_seconds)
+                    scheduled_due_at = (datetime.now(timezone.utc) + rand_offset).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    print(f"[BufferService] 🎲 Đã tính mốc giờ đăng ngẫu nhiên: {scheduled_due_at} (Sau {rand_minutes} phút {rand_seconds} giây)")
 
-                results = buffer_service.post_video_to_buffer_tiktok(
-                    access_token=buffer_token,
-                    channel_ids=ch_ids,
-                    video_url=public_video_url,
-                    caption=caption,
-                    mode="customScheduled",
-                    due_at=scheduled_due_at
-                )
-                print(f"[BufferService] Hoàn tất lên lịch phát hành ngẫu nhiên cho {len(results)} kênh TikTok!")
+                    results = buffer_service.post_video_to_buffer_tiktok(
+                        access_token=buffer_token,
+                        channel_ids=ch_ids,
+                        video_url=public_video_url,
+                        caption=caption,
+                        mode="customScheduled",
+                        due_at=scheduled_due_at
+                    )
+                print(f"[BufferService] Hoàn tất xử lý phát hành cho {len(results)} kênh TikTok!")
         except Exception as ex:
             print(f"[BufferService LỖI] {ex}")
     else:

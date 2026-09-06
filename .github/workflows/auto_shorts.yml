@@ -7,7 +7,12 @@ on:
     # - Đầu chiều: 18:00 VN (11:00 UTC) -> Buffer tự động đăng ngẫu nhiên trong 18:12 - 18:52
     # - Đầu đêm:   21:00 VN (14:00 UTC) -> Buffer tự động đăng ngẫu nhiên trong 21:12 - 21:52
     - cron: '0 4,11,14 * * *'
-  workflow_dispatch: # Cho phép bấm nút 'Run workflow' trên web GitHub bất cứ lúc nào
+  workflow_dispatch:
+    inputs:
+      test_now:
+        description: 'Đăng ngay lập tức để kiểm tra (true: shareNow, false: hẹn giờ ngẫu nhiên)'
+        required: false
+        default: 'true'
 
 permissions:
   contents: write
@@ -48,6 +53,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BUFFER_TOKEN: ${{ secrets.BUFFER_TOKEN }}
+          TEST_NOW: ${{ github.event.inputs.test_now || 'false' }}
         run: |
           python headless_producer.py
 
