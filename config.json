@@ -1,0 +1,21 @@
+{
+  "gemini_api_key": "",
+  "default_voice": "vi-VN-NamMinhNeural",
+  "speech_rate": "+0%",
+  "speech_pitch": "+0Hz",
+  "output_dir": "output",
+  "theme": "dark",
+  "font_name": "Montserrat-Black.ttf",
+  "fps": 30,
+  "video_width": 1080,
+  "video_height": 1920,
+  "selected_preset": "🎀 Nữ - MC Năng Động / Bắt Trend",
+  "selected_gender": "Nữ",
+  "voice_speed": 11,
+  "voice_pitch": -2,
+  "auto_post_fb_reels": true,
+  "selected_fb_page": "🌐 TẤT CẢ CÁC FANPAGE (Đăng đồng loạt)",
+  "fb_hashtags": "#shorts #reels #sosanh #trending #xuhuong",
+  "buffer_access_token": "",
+  "auto_post_buffer_tiktok": true
+}

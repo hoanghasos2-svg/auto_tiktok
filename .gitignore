@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.exe
+*.dll
+*.obj
+*.pdb
+
+# Local App Directories
+temp/*
+!temp/.gitkeep
+output/*
+!output/.gitkeep
+assets/my_voice/*
+!assets/my_voice/.gitkeep
+
+# Environment & Config
+.env
+.venv
+env/
+venv/
