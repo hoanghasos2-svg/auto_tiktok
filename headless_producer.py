@@ -149,8 +149,8 @@ def run_headless_pipeline():
 
     video_engine.build_comparison_video(
         script_data=script,
-        item_a_img_path=img_a_path,
-        item_b_img_path=img_b_path,
+        item_a_img=img_a_path,
+        item_b_img=img_b_path,
         segment_audios=seg_audios,
         output_path=out_video_path,
         progress_callback=lambda p, msg: print(f"  [Render {p*100:4.1f}%] {msg}")
