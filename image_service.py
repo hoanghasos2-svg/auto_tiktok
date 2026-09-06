@@ -168,60 +168,108 @@ def generate_pollinations_image(query: str, query_en: str = "") -> Optional[byte
     """Tertiary engine: Pollinations.ai High-Res Image (100% Free, No Key, Datacenter-friendly)."""
     target = query_en if query_en else query
     prompts_to_try = [
-        f"clear sharp photo of {target}, vivid color, highly detailed, realistic, 8k",
-        f"professional photo of {target}, studio lighting, realistic, 4k"
+        f"hyperrealistic cinematic photo of {target}, vibrant lighting, 8k resolution, photorealistic",
+        f"detailed studio photo of {target}, clear subject, beautiful colors, highly detailed"
     ]
     for prompt_text in prompts_to_try:
         try:
             clean_prompt = urllib.parse.quote(prompt_text)
             url = f"https://image.pollinations.ai/prompt/{clean_prompt}?width=480&height=480&nologo=true&seed={abs(hash(target)) % 99999}"
             headers = {"User-Agent": USER_AGENT}
-            resp = requests.get(url, headers=headers, timeout=16)
+            resp = requests.get(url, headers=headers, timeout=18)
             if resp.status_code == 200 and len(resp.content) > 6000:
                 return resp.content
         except Exception as ex:
             print(f"[ImageService] Pollinations AI attempt error: {ex}")
     return None
 
+def get_category_icon(display_name: str) -> str:
+    """Tự động chọn biểu tượng 3D phù hợp với chủ đề."""
+    name_lower = display_name.lower()
+    if any(k in name_lower for k in ["tiền", "giàu", "vàng", "đồ hiệu", "chi tiêu", "tiết kiệm", "giá"]):
+        return "💰"
+    if any(k in name_lower for k in ["rẻ", "đồ rẻ", "mua sắm", "thay liên tục"]):
+        return "🏷️"
+    if any(k in name_lower for k in ["cơm", "phở", "bún", "ăn", "lẩu", "món", "thịt", "trà"]):
+        return "🍲"
+    if any(k in name_lower for k in ["thợ", "lương", "lao động", "nghề"]):
+        return "🔨"
+    if any(k in name_lower for k in ["nô lệ", "ép buộc", "xiềng"]):
+        return "⛓️"
+    if any(k in name_lower for k in ["kim tự tháp", "ai cập", "lịch sử", "cổ đại"]):
+        return "🏛️"
+    if any(k in name_lower for k in ["nắng", "nóng", "sa mạc", "ngày"]):
+        return "☀️"
+    if any(k in name_lower for k in ["đêm", "lạnh", "sao", "băng"]):
+        return "🌙"
+    if any(k in name_lower for k in ["chó", "mèo", "thú cưng"]):
+        return "🐾"
+    if any(k in name_lower for k in ["điện thoại", "iphone", "samsung", "ai", "máy tính"]):
+        return "📱"
+    return "⚖️"
+
 def create_graphic_placeholder_card(display_name: str, output_path: str, border_color: str, target_size=(480, 480)):
     """Ultimate Fallback: Tạo thẻ đồ họa sản phẩm cao cấp nếu mọi nguồn mạng bị chặn."""
     card = Image.new("RGBA", target_size, (15, 23, 42, 255))
     draw = ImageDraw.Draw(card)
     
-    # Nền gradient sang trọng
+    # Nền gradient sang trọng sâu lắng
     for y in range(target_size[1]):
         factor = y / target_size[1]
-        r = int(30 * (1 - factor) + 15 * factor)
-        g = int(41 * (1 - factor) + 23 * factor)
-        b = int(65 * (1 - factor) + 42 * factor)
+        r = int(28 * (1 - factor) + 12 * factor)
+        g = int(38 * (1 - factor) + 18 * factor)
+        b = int(60 * (1 - factor) + 32 * factor)
         draw.line([(0, y), (target_size[0], y)], fill=(r, g, b))
 
-    # Viền bo tròn
+    # Viền bo tròn kép tạo chiều sâu
     draw.rounded_rectangle([4, 4, target_size[0] - 4, target_size[1] - 4], radius=28, outline=border_color, width=6)
+    draw.rounded_rectangle([12, 12, target_size[0] - 12, target_size[1] - 12], radius=22, outline="#334155", width=2)
 
-    # Chữ tên đối tượng
+    # Biểu tượng chủ đề ở vị trí trên
+    icon = get_category_icon(display_name)
     font_path = BASE_DIR / "assets" / "fonts" / "BeVietnamPro-ExtraBold.ttf"
     try:
-        font = ImageFont.truetype(str(font_path), 38) if font_path.exists() else ImageFont.load_default()
+        font_text = ImageFont.truetype(str(font_path), 36) if font_path.exists() else ImageFont.load_default()
+        font_icon = ImageFont.truetype(str(font_path), 72) if font_path.exists() else ImageFont.load_default()
     except Exception:
-        font = ImageFont.load_default()
+        font_text = ImageFont.load_default()
+        font_icon = ImageFont.load_default()
 
+    # Vẽ Icon
+    draw.text((target_size[0] // 2, 110), icon, font=font_icon, anchor="mm")
+
+    # Vẽ Tên đối tượng căn giữa hoàn hảo
     words = display_name.split()
     lines, cur_l = [], []
     for w in words:
         cur_l.append(w)
-        if len(" ".join(cur_l)) > 13:
+        if len(" ".join(cur_l)) > 11:
             lines.append(" ".join(cur_l[:-1]))
             cur_l = [w]
     if cur_l:
         lines.append(" ".join(cur_l))
         
-    y_text = 190
+    line_height = 56
+    total_text_h = len(lines[:3]) * line_height
+    y_text = (target_size[1] - total_text_h) // 2
+
+    # Huy hiệu nhỏ ở trên
+    badge_label = "CHỦ ĐỀ ĐỐI ĐẦU"
+    try:
+        font_badge = ImageFont.truetype(str(font_path), 20) if font_path.exists() else ImageFont.load_default()
+    except Exception:
+        font_badge = ImageFont.load_default()
+    draw.rounded_rectangle([target_size[0] // 2 - 110, y_text - 65, target_size[0] // 2 + 110, y_text - 25], radius=10, fill="#1E293B", outline=border_color, width=2)
+    draw.text((target_size[0] // 2, y_text - 45), badge_label, font=font_badge, fill=border_color, anchor="mm")
+
     for line in lines[:3]:
-        bbox = draw.textbbox((0, 0), line, font=font)
+        bbox = draw.textbbox((0, 0), line, font=font_text)
         tw = bbox[2] - bbox[0]
-        draw.text(((target_size[0] - tw) // 2, y_text), line, font=font, fill="#F8FAFC")
-        y_text += 54
+        # Text shadow
+        draw.text(((target_size[0] - tw) // 2 + 3, y_text + 3), line, font=font_text, fill="#020617")
+        # Text main
+        draw.text(((target_size[0] - tw) // 2, y_text), line, font=font_text, fill="#FFFFFF")
+        y_text += line_height
 
     card.save(output_path, "PNG")
     return output_path
