@@ -5,6 +5,7 @@ import json
 import random
 import shutil
 from pathlib import Path
+from typing import Dict, Any, List, Optional
 
 # Ensure UTF-8 output in headless environment
 if hasattr(sys.stdout, 'reconfigure'):
@@ -46,35 +47,65 @@ def cleanup_temp_folder():
         except Exception:
             pass
 
-def run_headless_pipeline():
-    print("=" * 65)
-    print("🤖 AUTO SHORTS - HEADLESS ZERO-TOUCH PRODUCER (0 VNĐ)")
-    print(f"⏰ Thời gian chạy: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 65)
+# Phân bổ ngách chủ đề chuyên biệt cho từng kênh TikTok
+CHANNEL_NICHE_MAP = {
+    "meothongthai.hehe": [
+        "🧪 Lầm Tưởng Đời Sống & Sự Thật Khoa Học",
+        "📜 Bí Ẩn Lịch Sử & Lầm Tưởng Cổ Nhân",
+        "🌍 Nghịch Lý Địa Lý & Văn Hóa Thế Giới"
+    ],
+    "meothantai123a": [
+        "💳 Thói Quen Tiêu Dùng & Quản Lý Tiền Bạc",
+        "💰 Quyết Định Tài Chính & Đầu Tư Lớn",
+        "🏢 Tranh Cãi Công Sở & Tư Duy Đi Làm",
+        "🎭 Tâm Lý Học Hành Vi & Bẫy Cảm Xúc"
+    ],
+    "hoanghavibes": [
+        "🍜 Ẩm thực & Món ăn Đặc sản",
+        "🥑 Tranh Luận Dinh Dưỡng & Ăn Uống Lành Mạnh",
+        "🐾 Thú Cưng: Nuôi Dạy & So Sánh Giống Loài",
+        "🐕 Giải Mã Hành Vi Thú Cưng & Bí Ẩn Động Vật",
+        "📱 Công nghệ & Thiết bị Điện tử"
+    ]
+}
 
-    cfg = config_manager.load_config()
-    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip() or cfg.get("gemini_api_key", "").strip()
-    buffer_token = os.environ.get("BUFFER_TOKEN", "").strip() or cfg.get("buffer_access_token", "").strip()
+def get_niche_categories_for_channel(channel_name: str) -> List[str]:
+    """Tìm danh mục chuyên biệt cho kênh, fallback nếu tên kênh mới."""
+    clean_name = channel_name.strip().lower()
+    for k, niches in CHANNEL_NICHE_MAP.items():
+        if k in clean_name:
+            return niches
+    # Fallback cho kênh mới: chia đều theo hash tên kênh
+    all_cats = list(gemini_service.TOPIC_CATEGORIES.keys())
+    offset = abs(hash(clean_name)) % len(all_cats)
+    return [all_cats[offset]]
 
-    if not gemini_key:
-        print("[LỖI] Thiếu GEMINI_API_KEY. Vui lòng cấu hình trong GitHub Secrets hoặc config.json.")
-        sys.exit(1)
+def produce_single_video_for_channel(
+    channel_info: Dict[str, Any],
+    gemini_key: str,
+    buffer_token: str,
+    is_test_now: bool,
+    index: int = 1,
+    total: int = 1
+):
+    channel_id = channel_info["id"]
+    channel_name = channel_info.get("name", f"Channel_{channel_id}")
+    print("\n" + "#" * 65)
+    print(f"🎬 [{index}/{total}] BẮT ĐẦU SẢN XUẤT CHO KÊNH: {channel_name} (ID: {channel_id})")
+    print("#" * 65)
 
-    # 1. Khởi tạo tài nguyên hệ thống
-    print("[1/6] Đang kiểm tra & khởi tạo tài nguyên đồ họa/font...")
-    asset_manager.init_all_assets()
+    # 1. Dọn dẹp temp trước khi tạo video mới
+    cleanup_temp_folder()
 
-    # 2. Lựa chọn chủ đề không trùng lặp (Infinite Topic Engine)
-    print("[2/6] Đang chọn lọc chủ đề so sánh (Chống trùng lặp 100%)...")
-    categories = list(gemini_service.TOPIC_CATEGORIES.keys())
-    random.shuffle(categories)
-    selected_category = categories[0]
+    # 2. Chọn chủ đề ngách riêng cho kênh này
+    niche_categories = get_niche_categories_for_channel(channel_name)
+    random.shuffle(niche_categories)
+    selected_category = niche_categories[0]
 
     used_titles = script_manager.get_used_titles(selected_category)
     used_pairs = script_manager.get_used_pairs(selected_category)
 
-    # Tìm chủ đề tĩnh chưa dùng
-    static_topics = gemini_service.TOPIC_CATEGORIES[selected_category]
+    static_topics = gemini_service.TOPIC_CATEGORIES.get(selected_category, [])
     candidate_topic = None
     for top in static_topics:
         parts = top.split(" vs ")
@@ -84,13 +115,13 @@ def run_headless_pipeline():
             candidate_topic = top
             break
 
-    print(f"-> Thể loại: {selected_category}")
+    print(f"🎯 Ngách nội dung kênh [{channel_name}]: {selected_category}")
     if candidate_topic:
         print(f"-> Chủ đề chọn từ kho: {candidate_topic}")
     else:
-        print("-> Kho chủ đề tĩnh của thể loại này đã dùng hết. Kích hoạt AI sáng tạo chủ đề mới toanh!")
+        print("-> Kho chủ đề tĩnh đã dùng hết. Kích hoạt Gemini AI sáng tạo chủ đề mới toanh!")
 
-    # Sinh kịch bản qua Gemini
+    # Sinh kịch bản độc nhất vô nhị
     script = gemini_service.generate_single_comparison_script(
         category=selected_category,
         specific_topic=candidate_topic,
@@ -102,10 +133,9 @@ def run_headless_pipeline():
     print(f"-> Tiêu đề kịch bản: {script['title']}")
     print(f"-> So sánh: {script['item_a']['name']} VS {script['item_b']['name']}")
 
-    # 3. Tải và xử lý hình ảnh 1:1
-    print("[3/6] Đang tìm kiếm và xử lý hình ảnh sản phẩm 1:1...")
-    img_a_path = str(TEMP_DIR / "item_a_square.png")
-    img_b_path = str(TEMP_DIR / "item_b_square.png")
+    # 3. Tải và xử lý hình ảnh 1:1 cho video
+    img_a_path = str(TEMP_DIR / f"item_a_{channel_id[:6]}.png")
+    img_b_path = str(TEMP_DIR / f"item_b_{channel_id[:6]}.png")
 
     image_service.search_and_download_image(
         script["item_a"].get("search_query", ""),
@@ -123,12 +153,11 @@ def run_headless_pipeline():
     )
 
     # 4. Sinh giọng đọc Edge-TTS
-    print("[4/6] Đang sinh giọng đọc AI tiếng Việt chất lượng cao...")
     voice_choice = random.choice(["vi-VN-NamMinhNeural", "vi-VN-HoaiMyNeural"])
     seg_audios = []
     for seg in script["segments"]:
         sid = seg["segment_id"]
-        audio_file = str(TEMP_DIR / f"vo_{sid}.mp3")
+        audio_file = str(TEMP_DIR / f"vo_{sid}_{channel_id[:6]}.mp3")
         res = tts_service.generate_speech(
             seg["voiceover_text"],
             audio_file,
@@ -143,87 +172,123 @@ def run_headless_pipeline():
             "words": res["words"]
         })
 
-    # 5. Dựng video 9:16
-    print("[5/6] Đang render video Full HD 1080x1920 (MoviePy + Pillow)...")
+    # 5. Dựng video 9:16 Full HD
     clean_title = "".join(c for c in script["title"] if c.isalnum() or c in (" ", "_", "-")).strip()
-    clean_title = clean_title.replace(" ", "_")[:35]
-    out_video_path = str(OUTPUT_DIR / f"TikTok_{clean_title}_{int(time.time())}.mp4")
+    clean_title = clean_title.replace(" ", "_")[:30]
+    out_video_path = str(OUTPUT_DIR / f"TikTok_{channel_name}_{clean_title}_{int(time.time())}.mp4")
 
+    print(f"Đang render video 1080x1920 cho kênh {channel_name}...")
     video_engine.build_comparison_video(
         script_data=script,
         item_a_img=img_a_path,
         item_b_img=img_b_path,
         segment_audios=seg_audios,
         output_path=out_video_path,
-        progress_callback=lambda p, msg: print(f"  [Render {p*100:4.1f}%] {msg}")
+        progress_callback=lambda p, msg: print(f"  [{channel_name} Render {p*100:4.1f}%] {msg}")
     )
 
     if not os.path.exists(out_video_path) or os.path.getsize(out_video_path) < 1000:
-        print("[LỖI] Render video thất bại.")
+        print(f"[LỖI] Render video cho kênh {channel_name} thất bại.")
+        return False
+
+    # Ghi nhận lịch sử chống trùng lặp gắn liền với kênh
+    script_manager.mark_script_as_used(script, out_video_path, channel_id=channel_id, channel_name=channel_name)
+    print(f"-> Ghi nhận kịch bản cho kênh {channel_name}. Tổng kho lịch sử: {script_manager.get_used_count()}")
+
+    # 6. Đăng DUY NHẤT lên 1 kênh này
+    if buffer_token:
+        try:
+            print(f"[BufferService] Tải video lên host trung gian cho kênh {channel_name}...")
+            public_video_url = buffer_service.upload_to_catbox(out_video_path)
+            
+            caption = f"{script['title']}\n\nTheo bạn bên nào đỉnh hơn? Bình luận ngay nhé!\n#shorts #tiktok #sosanh #xuhuong #trending #fyp"
+
+            if is_test_now:
+                print(f"[BufferService] ⚡ TEST_NOW: Đăng ngay lập tức lên duy nhất kênh [{channel_name}]!")
+                buffer_service.post_video_to_buffer_tiktok(
+                    access_token=buffer_token,
+                    channel_ids=[channel_id],
+                    video_url=public_video_url,
+                    caption=caption,
+                    mode="shareNow",
+                    due_at=None
+                )
+            else:
+                from datetime import datetime, timedelta, timezone
+                rand_minutes = random.randint(12, 50)
+                rand_seconds = random.randint(0, 59)
+                scheduled_due_at = (datetime.now(timezone.utc) + timedelta(minutes=rand_minutes, seconds=rand_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                print(f"[BufferService] 🎲 Hẹn giờ đăng ngẫu nhiên cho [{channel_name}]: {scheduled_due_at}")
+
+                buffer_service.post_video_to_buffer_tiktok(
+                    access_token=buffer_token,
+                    channel_ids=[channel_id],
+                    video_url=public_video_url,
+                    caption=caption,
+                    mode="customScheduled",
+                    due_at=scheduled_due_at
+                )
+            print(f"✅ Hoàn tất phát hành video độc quyền cho kênh [{channel_name}]!")
+        except Exception as ex:
+            print(f"[BufferService LỖI trên kênh {channel_name}]: {ex}")
+
+    cleanup_temp_folder()
+    return True
+
+def run_headless_pipeline():
+    print("=" * 65)
+    print("🤖 AUTO SHORTS - 1 VIDEO PER CHANNEL ARCHITECTURE (0 VNĐ)")
+    print(f"⏰ Thời gian chạy: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 65)
+
+    cfg = config_manager.load_config()
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip() or cfg.get("gemini_api_key", "").strip()
+    buffer_token = os.environ.get("BUFFER_TOKEN", "").strip() or cfg.get("buffer_access_token", "").strip()
+
+    if not gemini_key:
+        print("[LỖI] Thiếu GEMINI_API_KEY. Vui lòng cấu hình trong GitHub Secrets hoặc config.json.")
         sys.exit(1)
 
-    print(f"-> Render thành công: {out_video_path} ({os.path.getsize(out_video_path):,} bytes)")
+    # 1. Khởi tạo tài nguyên hệ thống
+    print("[1/2] Kiểm tra tài nguyên đồ họa/font...")
+    asset_manager.init_all_assets()
 
-    # Lưu lịch sử chống trùng
-    script_manager.mark_script_as_used(script, out_video_path)
-    print(f"-> Đã ghi nhận vào lịch sử chống trùng. Tổng video đã làm: {script_manager.get_used_count()}")
-
-    # 6. Đăng tải lên TikTok qua Buffer API
+    # 2. Lấy danh sách kênh TikTok từ Buffer
+    print("[2/2] Truy vấn danh sách kênh TikTok từ Buffer API...")
+    is_test_now = os.environ.get("TEST_NOW", "").lower() in ("true", "1", "yes")
+    
     if buffer_token:
-        print("[6/6] Đang tự động phát hành lên TikTok qua Buffer API...")
-        try:
-            # Lấy link direct public video
-            public_video_url = buffer_service.upload_to_catbox(out_video_path)
-
-            # Lấy các kênh TikTok
-            channels = buffer_service.get_connected_tiktok_channels(buffer_token)
-            if not channels:
-                print("[BufferService] Cảnh báo: Không tìm thấy kênh TikTok nào trong Buffer.")
-            else:
-                ch_ids = [c["id"] for c in channels]
-                ch_names = [c["name"] for c in channels]
-                print(f"[BufferService] Đang đăng đồng loạt lên {len(ch_ids)} kênh: {', '.join(ch_names)}")
-
-                caption = f"{script['title']}\n\nTheo bạn bên nào đỉnh hơn? Bình luận ngay nhé!\n#shorts #tiktok #sosanh #xuhuong #trending #fyp"
-                
-                # Nếu là lượt test ngay (TEST_NOW=true) thì đăng shareNow, ngược lại hẹn giờ ngẫu nhiên
-                is_test_now = os.environ.get("TEST_NOW", "").lower() in ("true", "1", "yes")
-                if is_test_now:
-                    print("[BufferService] ⚡ Chế độ TEST_NOW kích hoạt: Đăng ngay lập tức (shareNow)!")
-                    results = buffer_service.post_video_to_buffer_tiktok(
-                        access_token=buffer_token,
-                        channel_ids=ch_ids,
-                        video_url=public_video_url,
-                        caption=caption,
-                        mode="shareNow",
-                        due_at=None
-                    )
-                else:
-                    from datetime import datetime, timedelta, timezone
-                    rand_minutes = random.randint(12, 50)
-                    rand_seconds = random.randint(0, 59)
-                    rand_offset = timedelta(minutes=rand_minutes, seconds=rand_seconds)
-                    scheduled_due_at = (datetime.now(timezone.utc) + rand_offset).strftime("%Y-%m-%dT%H:%M:%SZ")
-                    print(f"[BufferService] 🎲 Đã tính mốc giờ đăng ngẫu nhiên: {scheduled_due_at} (Sau {rand_minutes} phút {rand_seconds} giây)")
-
-                    results = buffer_service.post_video_to_buffer_tiktok(
-                        access_token=buffer_token,
-                        channel_ids=ch_ids,
-                        video_url=public_video_url,
-                        caption=caption,
-                        mode="customScheduled",
-                        due_at=scheduled_due_at
-                    )
-                print(f"[BufferService] Hoàn tất xử lý phát hành cho {len(results)} kênh TikTok!")
-        except Exception as ex:
-            print(f"[BufferService LỖI] {ex}")
+        channels = buffer_service.get_connected_tiktok_channels(buffer_token)
+        if not channels:
+            print("[BufferService] Cảnh báo: Không tìm thấy kênh TikTok nào trong Buffer.")
+            return
+        
+        print(f"-> Tìm thấy {len(channels)} kênh TikTok: {', '.join(c['name'] for c in channels)}")
+        print("-> TIẾN HÀNH SẢN XUẤT ĐỘC LẬP: MỖI KÊNH 1 VIDEO RIÊNG BIỆT VỚI CHỦ ĐỀ KHÁC NHAU!")
+        
+        for idx, ch in enumerate(channels, 1):
+            produce_single_video_for_channel(
+                channel_info=ch,
+                gemini_key=gemini_key,
+                buffer_token=buffer_token,
+                is_test_now=is_test_now,
+                index=idx,
+                total=len(channels)
+            )
     else:
-        print("[6/6] Bỏ qua bước đăng TikTok vì chưa cấu hình BUFFER_TOKEN.")
+        # Fallback tạo 1 video mẫu nếu không có Buffer Token
+        print("Không tìm thấy BUFFER_TOKEN, sản xuất 1 video demo...")
+        produce_single_video_for_channel(
+            channel_info={"id": "local_demo", "name": "demo_channel"},
+            gemini_key=gemini_key,
+            buffer_token="",
+            is_test_now=True,
+            index=1,
+            total=1
+        )
 
-    # Dọn dẹp temp
-    cleanup_temp_folder()
-    print("=" * 65)
-    print("✅ QUY TRÌNH HOÀN TẤT THÀNH CÔNG!")
+    print("\n" + "=" * 65)
+    print("🎉 TẤT CẢ CÁC KÊNH ĐÃ ĐƯỢC XUẤT BẢN VIDEO RIÊNG BIỆT THÀNH CÔNG!")
     print("=" * 65)
 
 if __name__ == "__main__":

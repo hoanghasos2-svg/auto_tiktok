@@ -1,4 +1,4 @@
-﻿import os
+import os
 import json
 import time
 import re
@@ -154,7 +154,7 @@ def is_duplicate(title: str, name_a: str, name_b: str, category: Optional[str] =
             
     return False
 
-def mark_script_as_used(script: Dict[str, Any], video_path: str):
+def mark_script_as_used(script: Dict[str, Any], video_path: str, channel_id: str = "", channel_name: str = ""):
     """Permanently record completed script in used history to ensure zero duplication."""
     used = _load_used_history()
     item_a_name = script.get("item_a", {}).get("name") if isinstance(script.get("item_a"), dict) else str(script.get("item_a", "Bên A"))
@@ -167,6 +167,8 @@ def mark_script_as_used(script: Dict[str, Any], video_path: str):
         "angle": script.get("angle", "Toàn diện"),
         "item_a": item_a_name,
         "item_b": item_b_name,
+        "channel_id": channel_id,
+        "channel_name": channel_name,
         "video_path": video_path,
         "rendered_at": time.strftime("%Y-%m-%d %H:%M:%S")
     }
