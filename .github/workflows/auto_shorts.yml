@@ -63,4 +63,4 @@ jobs:
           git config user.email "bot@autoproducer.local"
           git add database/used_history.json
           git commit -m "Auto: Update video history [skip ci]" || echo "Không có thay đổi lịch sử"
-          git push origin HEAD || echo "Không cần push"
+          git push origin HEAD || echo "Không thể push hoặc không có thay đổi"

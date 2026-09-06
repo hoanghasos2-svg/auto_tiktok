@@ -33,11 +33,29 @@ def upload_to_catbox(video_path: str, timeout: int = 180) -> str:
             direct_url = resp.text.strip()
             print(f"[BufferService] Direct Video URL (Catbox): {direct_url}")
             return direct_url
-        print(f"[BufferService] Catbox phản hồi ({resp.status_code}): {resp.text.strip()}. Chuyển sang cổng phụ Uguu...")
+        print(f"[BufferService] Catbox phản hồi ({resp.status_code}): {resp.text.strip()}. Chuyển sang cổng phụ Litterbox...")
     except Exception as ce:
-        print(f"[BufferService] Catbox error: {ce}. Chuyển sang Uguu...")
+        print(f"[BufferService] Catbox error: {ce}. Chuyển sang Litterbox...")
 
-    # 2. Cổng dự phòng Uguu.se (Miễn phí, Direct link .mp4, hỗ trợ máy chủ Linux)
+    # 2. Cổng dự phòng Litterbox (Chuyên file tạm 24h, cực kỳ ổn định)
+    try:
+        with open(video_path, "rb") as f:
+            resp = requests.post(
+                "https://litterbox.catbox.moe/resources/internals/api.php",
+                data={"reqtype": "fileupload", "time": "24h"},
+                files={"fileToUpload": (filename, f, "video/mp4")},
+                headers=headers,
+                timeout=timeout
+            )
+        if resp.status_code == 200 and resp.text.strip().startswith("http"):
+            direct_url = resp.text.strip()
+            print(f"[BufferService] Direct Video URL (Litterbox 24h): {direct_url}")
+            return direct_url
+        print(f"[BufferService] Litterbox phản hồi ({resp.status_code}). Chuyển sang Uguu...")
+    except Exception as le:
+        print(f"[BufferService] Litterbox error: {le}. Chuyển sang Uguu...")
+
+    # 3. Cổng dự phòng Uguu.se (Miễn phí, Direct link .mp4, hỗ trợ máy chủ Linux)
     try:
         with open(video_path, "rb") as f:
             resp = requests.post(

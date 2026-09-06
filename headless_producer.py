@@ -283,14 +283,17 @@ def run_headless_pipeline():
         print("-> TIẾN HÀNH SẢN XUẤT ĐỘC LẬP: MỖI KÊNH 1 VIDEO RIÊNG BIỆT VỚI CHỦ ĐỀ KHÁC NHAU!")
         
         for idx, ch in enumerate(channels, 1):
-            produce_single_video_for_channel(
-                channel_info=ch,
-                gemini_key=gemini_key,
-                buffer_token=buffer_token,
-                is_test_now=is_test_now,
-                index=idx,
-                total=len(channels)
-            )
+            try:
+                produce_single_video_for_channel(
+                    channel_info=ch,
+                    gemini_key=gemini_key,
+                    buffer_token=buffer_token,
+                    is_test_now=is_test_now,
+                    index=idx,
+                    total=len(channels)
+                )
+            except Exception as ch_err:
+                print(f"[LỖI KÊNH {ch.get('name', 'N/A')}] Xảy ra lỗi khi sản xuất: {ch_err}. Tự động bỏ qua để xử lý kênh tiếp theo!")
     else:
         # Fallback tạo 1 video mẫu nếu không có Buffer Token
         print("Không tìm thấy BUFFER_TOKEN, sản xuất 1 video demo...")
