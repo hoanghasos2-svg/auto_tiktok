@@ -47,45 +47,42 @@ def cleanup_temp_folder():
         except Exception:
             pass
 
-# Phân bổ ngách chủ đề chuyên biệt cho từng kênh TikTok
+# Phân bổ ngách chủ đề chuyên biệt độc quyền cho TẤT CẢ 6 KÊNH TIKTOK:
 CHANNEL_NICHE_MAP = {
-    # Nhóm kênh mới:
-    "tramsuyngam.hehe": [
+    # Kênh 1: Khoa học đời sống, Khám phá & Lịch sử
+    "meothongthai.hehe": [
         "🧪 Lầm Tưởng Đời Sống & Sự Thật Khoa Học",
-        "📜 Bí Ẩn Lịch Sử & Lầm Tưởng Cổ Nhân",
-        "🌍 Nghịch Lý Địa Lý & Văn Hóa Thế Giới",
-        "🎭 Tâm Lý Học Hành Vi & Bẫy Cảm Xúc"
+        "📜 Bí Ẩn Lịch Sử & Lầm Tưởng Cổ Nhân"
     ],
-    "hoanghaxyz": [
+    # Kênh 2: Quản lý tiền bạc cá nhân, Chi tiêu & Công sở
+    "meothantai123a": [
         "💳 Thói Quen Tiêu Dùng & Quản Lý Tiền Bạc",
-        "💰 Quyết Định Tài Chính & Đầu Tư Lớn",
-        "🏢 Tranh Cãi Công Sở & Tư Duy Đi Làm",
-        "📱 Công nghệ & Thiết bị Điện tử"
+        "🏢 Tranh Cãi Công Sở & Tư Duy Đi Làm"
     ],
+    # Kênh 3: Thiết bị công nghệ, Điện thoại & AI
+    "hoanghavibes": [
+        "📱 Công nghệ & Thiết bị Điện tử",
+        "🤖 Phần Mềm, Ứng Dụng & Công Cụ AI",
+        "🎮 Game & Thiết Bị Giải Trí"
+    ],
+    # Kênh 4: Triết lý sống, Địa lý thế giới & Tâm lý học
+    "tramsuyngam.hehe": [
+        "🌍 Nghịch Lý Địa Lý & Văn Hóa Thế Giới",
+        "🎭 Tâm Lý Học Hành Vi & Bẫy Cảm Xúc",
+        "👨‍👩‍👧 Tranh Luận Nuôi Dạy Con & Gia Đình"
+    ],
+    # Kênh 5: Đầu tư tài chính, Kinh doanh & Sự nghiệp
+    "hoanghaxyz": [
+        "💰 Quyết Định Tài Chính & Đầu Tư Lớn",
+        "💻 Tương Lai Việc Làm: AI vs Kỹ Năng Con Người",
+        "🚗 Xe cộ & Phương tiện Di chuyển"
+    ],
+    # Kênh 6: Ẩm thực ăn uống, Dinh dưỡng & Thú cưng
     "jemniferr": [
         "🍜 Ẩm thực & Món ăn Đặc sản",
         "🥑 Tranh Luận Dinh Dưỡng & Ăn Uống Lành Mạnh",
         "🐾 Thú Cưng: Nuôi Dạy & So Sánh Giống Loài",
         "🐕 Giải Mã Hành Vi Thú Cưng & Bí Ẩn Động Vật"
-    ],
-    # Nhóm kênh cũ (backward compatibility):
-    "meothongthai.hehe": [
-        "🧪 Lầm Tưởng Đời Sống & Sự Thật Khoa Học",
-        "📜 Bí Ẩn Lịch Sử & Lầm Tưởng Cổ Nhân",
-        "🌍 Nghịch Lý Địa Lý & Văn Hóa Thế Giới"
-    ],
-    "meothantai123a": [
-        "💳 Thói Quen Tiêu Dùng & Quản Lý Tiền Bạc",
-        "💰 Quyết Định Tài Chính & Đầu Tư Lớn",
-        "🏢 Tranh Cãi Công Sở & Tư Duy Đi Làm",
-        "🎭 Tâm Lý Học Hành Vi & Bẫy Cảm Xúc"
-    ],
-    "hoanghavibes": [
-        "🍜 Ẩm thực & Món ăn Đặc sản",
-        "🥑 Tranh Luận Dinh Dưỡng & Ăn Uống Lành Mạnh",
-        "🐾 Thú Cưng: Nuôi Dạy & So Sánh Giống Loài",
-        "🐕 Giải Mã Hành Vi Thú Cưng & Bí Ẩn Động Vật",
-        "📱 Công nghệ & Thiết bị Điện tử"
     ]
 }
 
@@ -293,30 +290,43 @@ def run_headless_pipeline():
     print("[2/2] Truy vấn danh sách kênh TikTok từ Buffer API...")
     is_test_now = os.environ.get("TEST_NOW", "").lower() in ("true", "1", "yes")
     
-    if buffer_token:
-        channels = buffer_service.get_connected_tiktok_channels(buffer_token)
-        if not channels:
-            print("[BufferService] Cảnh báo: Không tìm thấy kênh TikTok nào trong Buffer.")
-            return
-        
-        print(f"-> Tìm thấy {len(channels)} kênh TikTok: {', '.join(c['name'] for c in channels)}")
+    # 2. Lấy danh sách kênh TikTok từ tất cả các tài khoản Buffer
+    print("[2/2] Truy vấn danh sách kênh TikTok từ tất cả tài khoản Buffer...")
+    is_test_now = os.environ.get("TEST_NOW", "").lower() in ("true", "1", "yes")
+    
+    # Hỗ trợ đa token (cách nhau bởi dấu phẩy hoặc dòng mới)
+    raw_tokens = [t.strip() for t in buffer_token.replace("\n", ",").split(",") if t.strip()]
+    all_channels = []
+    
+    for b_idx, tok in enumerate(raw_tokens, 1):
+        try:
+            chans = buffer_service.get_connected_tiktok_channels(tok)
+            print(f"[BufferService] Tài khoản {b_idx}: Tìm thấy {len(chans)} kênh TikTok ({', '.join(c['name'] for c in chans)})")
+            for c in chans:
+                c["token"] = tok
+                all_channels.append(c)
+        except Exception as b_err:
+            print(f"[BufferService Lỗi Tài khoản {b_idx}]: {b_err}")
+            
+    if all_channels:
+        print(f"\n-> TỔNG CỘNG: {len(all_channels)} KÊNH TIKTOK SẴN SÀNG HOẠT ĐỘNG: {', '.join(c['name'] for c in all_channels)}")
         print("-> TIẾN HÀNH SẢN XUẤT ĐỘC LẬP: MỖI KÊNH 1 VIDEO RIÊNG BIỆT VỚI CHỦ ĐỀ KHÁC NHAU!")
         
-        for idx, ch in enumerate(channels, 1):
+        for idx, ch in enumerate(all_channels, 1):
             try:
                 produce_single_video_for_channel(
                     channel_info=ch,
                     gemini_key=gemini_key,
-                    buffer_token=buffer_token,
+                    buffer_token=ch.get("token", ""),
                     is_test_now=is_test_now,
                     index=idx,
-                    total=len(channels)
+                    total=len(all_channels)
                 )
             except Exception as ch_err:
                 print(f"[LỖI KÊNH {ch.get('name', 'N/A')}] Xảy ra lỗi khi sản xuất: {ch_err}. Tự động bỏ qua để xử lý kênh tiếp theo!")
     else:
         # Fallback tạo 1 video mẫu nếu không có Buffer Token
-        print("Không tìm thấy BUFFER_TOKEN, sản xuất 1 video demo...")
+        print("Không tìm thấy kênh TikTok nào trong Buffer, sản xuất 1 video demo...")
         produce_single_video_for_channel(
             channel_info={"id": "local_demo", "name": "demo_channel"},
             gemini_key=gemini_key,
