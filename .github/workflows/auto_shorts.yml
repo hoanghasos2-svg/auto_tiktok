@@ -1,12 +1,11 @@
-name: Auto TikTok Shorts Producer (3 Videos / Day)
+name: Auto TikTok Shorts Producer (2-Phase Autonomous Schedule)
 
 on:
   schedule:
-    # 3 Khung Giờ Vàng Việt Nam (GMT+7) - Thức dậy lúc đầu khung giờ:
-    # - Đầu trưa:  11:00 VN (04:00 UTC) -> Buffer tự động đăng ngẫu nhiên trong 11:12 - 11:52
-    # - Đầu chiều: 18:00 VN (11:00 UTC) -> Buffer tự động đăng ngẫu nhiên trong 18:12 - 18:52
-    # - Đầu đêm:   21:00 VN (14:00 UTC) -> Buffer tự động đăng ngẫu nhiên trong 21:12 - 21:52
-    - cron: '0 4,11,14 * * *'
+    # 2 Khung Giờ Vàng Việt Nam (GMT+7):
+    # - Ca Trưa: 11:00 VN (04:00 UTC) -> Phase 1: Tạm nghỉ | Phase 2 (từ ngày 31): Đăng video #1
+    # - Ca Tối:  20:00 VN (13:00 UTC) -> Phase 1: Đăng video duy nhất trong ngày | Phase 2: Đăng video #2
+    - cron: '0 4,13 * * *'
   workflow_dispatch:
     inputs:
       test_now:
@@ -54,6 +53,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BUFFER_TOKEN: ${{ secrets.BUFFER_TOKEN }}
           TEST_NOW: ${{ github.event.inputs.test_now || 'false' }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
           python headless_producer.py
 

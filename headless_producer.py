@@ -4,6 +4,7 @@ import time
 import json
 import random
 import shutil
+from datetime import datetime, timezone, timedelta, date
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -46,6 +47,56 @@ def cleanup_temp_folder():
                 shutil.rmtree(item)
         except Exception:
             pass
+
+# ==============================================================================
+# CẤU HÌNH LỊCH TRÌNH ĐĂNG BÀI 2 GIAI ĐOẠN TỰ ĐỘNG (HOÀN TOÀN TỰ HÀNH 100%)
+# - Giai đoạn 1 (Ngày 1 đến ngày 30): 1 video / ngày / kênh (Đăng lúc 20:00 VN)
+# - Giai đoạn 2 (Từ ngày 31 trở đi):  2 video / ngày / kênh (Đăng 11:00 & 20:00 VN)
+# ==============================================================================
+START_DATE = date(2026, 9, 8)
+VN_TZ = timezone(timedelta(hours=7))
+
+def get_posting_schedule_phase(now_vn: Optional[datetime] = None) -> Dict[str, Any]:
+    """
+    Tự động tính toán ngày và giai đoạn đăng bài không cần can thiệp thủ công:
+    - Phase 1 (Day <= 30): 1 video/ngày/kênh (Chỉ chạy ca Tối 20:00 VN, bỏ qua ca Trưa)
+    - Phase 2 (Day >= 31): 2 video/ngày/kênh (Chạy cả ca Trưa 11:00 VN & Tối 20:00 VN)
+    """
+    if now_vn is None:
+        now_vn = datetime.now(VN_TZ)
+    current_date = now_vn.date()
+    days_passed = (current_date - START_DATE).days
+    day_number = max(1, days_passed + 1)
+    
+    if day_number <= 30:
+        phase = 1
+        videos_per_day = 1
+        desc = f"Giai đoạn 1 (Ngày {day_number}/30): 1 video/ngày/kênh"
+    else:
+        phase = 2
+        videos_per_day = 2
+        desc = f"Giai đoạn 2 (Ngày {day_number}): 2 video/ngày/kênh"
+        
+    # Ca Trưa: trước 16:00 VN (Cron 04:00 UTC = 11:00 VN)
+    # Ca Tối: từ 16:00 VN trở đi (Cron 13:00 UTC = 20:00 VN)
+    is_lunch_slot = now_vn.hour < 16
+    slot_name = "TRƯA (11:00 VN)" if is_lunch_slot else "TỐI (20:00 VN)"
+
+    # Quyết định ca này có đăng video hay nghỉ:
+    # Phase 1: Bỏ qua ca Trưa, chỉ chạy ca Tối
+    # Phase 2: Chạy cả ca Trưa và ca Tối
+    should_run = (phase == 2) or (not is_lunch_slot)
+
+    return {
+        "phase": phase,
+        "day_number": day_number,
+        "videos_per_day": videos_per_day,
+        "description": desc,
+        "is_lunch_slot": is_lunch_slot,
+        "slot_name": slot_name,
+        "should_run": should_run,
+        "now_vn": now_vn
+    }
 
 # Phân bổ ngách chủ đề chuyên biệt độc quyền cho TẤT CẢ 6 KÊNH TIKTOK:
 CHANNEL_NICHE_MAP = {
@@ -247,11 +298,10 @@ def produce_single_video_for_channel(
                     due_at=None
                 )
             else:
-                from datetime import datetime, timedelta, timezone
-                rand_minutes = random.randint(12, 50)
-                rand_seconds = random.randint(0, 59)
-                scheduled_due_at = (datetime.now(timezone.utc) + timedelta(minutes=rand_minutes, seconds=rand_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
-                print(f"[BufferService] 🎲 Hẹn giờ đăng ngẫu nhiên cho [{channel_name}]: {scheduled_due_at}")
+                # Phân bổ thời gian đăng tự nhiên cho từng kênh (khoảng 15 - 45 phút sau giờ kích hoạt)
+                channel_offset = index * 4 + random.randint(0, 5)
+                scheduled_due_at = (datetime.now(timezone.utc) + timedelta(minutes=15 + channel_offset, seconds=random.randint(0, 59))).strftime("%Y-%m-%dT%H:%M:%SZ")
+                print(f"[BufferService] 🎲 Hẹn giờ đăng ngẫu nhiên cho [{channel_name}] (Kênh {index}/{total}): {scheduled_due_at}")
 
                 buffer_service.post_video_to_buffer_tiktok(
                     access_token=buffer_token,
@@ -269,10 +319,26 @@ def produce_single_video_for_channel(
     return True
 
 def run_headless_pipeline():
+    now_vn = datetime.now(VN_TZ)
+    schedule_info = get_posting_schedule_phase(now_vn)
+
     print("=" * 65)
-    print("🤖 AUTO SHORTS - 1 VIDEO PER CHANNEL ARCHITECTURE (0 VNĐ)")
-    print(f"⏰ Thời gian chạy: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print("🤖 HỆ THỐNG TỰ ĐỘNG SẢN XUẤT & ĐĂNG TIKTOK SHORTS (0 VNĐ)")
+    print(f"⏰ Thời gian hiện tại (VN): {now_vn.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"📅 Trạng thái lịch: {schedule_info['description']}")
+    print(f"🕒 Khung giờ chạy: {schedule_info['slot_name']}")
     print("=" * 65)
+
+    is_test_now = os.environ.get("TEST_NOW", "").lower() in ("true", "1", "yes")
+    is_manual_dispatch = os.environ.get("GITHUB_EVENT_NAME", "").lower() == "workflow_dispatch"
+
+    # Kiểm tra điều kiện giai đoạn (Chỉ áp dụng khi chạy định kỳ Cron):
+    if not is_test_now and not is_manual_dispatch and not schedule_info["should_run"]:
+        print(f"\n[THÔNG BÁO LỊCH TRÌNH] Hiện đang ở {schedule_info['description']}.")
+        print(f"-> Ca {schedule_info['slot_name']} tạm nghỉ để đảm bảo chỉ đăng chuẩn xác 1 video/ngày/kênh.")
+        print(f"-> Ca đăng video tiếp theo sẽ kích hoạt vào 20:00 VN (13:00 UTC) tối nay.")
+        print("-> Giữ nguyên trạng thái thành công cho workflow (Keep-alive an toàn).")
+        return
 
     cfg = config_manager.load_config()
     gemini_key = os.environ.get("GEMINI_API_KEY", "").strip() or cfg.get("gemini_api_key", "").strip()
@@ -286,13 +352,8 @@ def run_headless_pipeline():
     print("[1/2] Kiểm tra tài nguyên đồ họa/font...")
     asset_manager.init_all_assets()
 
-    # 2. Lấy danh sách kênh TikTok từ Buffer
-    print("[2/2] Truy vấn danh sách kênh TikTok từ Buffer API...")
-    is_test_now = os.environ.get("TEST_NOW", "").lower() in ("true", "1", "yes")
-    
     # 2. Lấy danh sách kênh TikTok từ tất cả các tài khoản Buffer
     print("[2/2] Truy vấn danh sách kênh TikTok từ tất cả tài khoản Buffer...")
-    is_test_now = os.environ.get("TEST_NOW", "").lower() in ("true", "1", "yes")
     
     # Hỗ trợ đa token (cách nhau bởi dấu phẩy hoặc dòng mới)
     raw_tokens = [t.strip() for t in buffer_token.replace("\n", ",").split(",") if t.strip()]
