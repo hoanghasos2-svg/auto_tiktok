@@ -30,6 +30,7 @@ ASSETS_DIR = BASE_DIR / "assets"
 BG_DIR = ASSETS_DIR / "backgrounds"
 MASCOT_DIR = ASSETS_DIR / "mascot"
 SFX_DIR = ASSETS_DIR / "sfx"
+BGM_DIR = ASSETS_DIR / "bgm"
 FONTS_DIR = ASSETS_DIR / "fonts"
 OUTPUT_DIR = BASE_DIR / "output"
 TEMP_DIR = BASE_DIR / "temp"
@@ -49,6 +50,13 @@ def set_clip_volume(clip, factor: float):
         return clip.with_volume_scaled(factor)
     elif hasattr(clip, 'volumex'):
         return clip.volumex(factor)
+    return clip
+
+def subclip_audio(clip, start: float, end: float):
+    if hasattr(clip, 'subclipped'):
+        return clip.subclipped(start, end)
+    elif hasattr(clip, 'subclip'):
+        return clip.subclip(start, end)
     return clip
 
 def set_video_audio(video_clip, audio_clip):
@@ -197,6 +205,15 @@ class VideoComposer:
         self.font_subtitle = get_best_font(42)
         self.font_vs = get_best_font(44)
 
+        # Pre-render high-impact VS badge for smooth dynamic pulsing
+        vs_sz = 220
+        vs_base = Image.new("RGBA", (vs_sz, vs_sz), (0, 0, 0, 0))
+        vs_draw = ImageDraw.Draw(vs_base)
+        vs_draw.ellipse([15, 15, 205, 205], fill=(245, 158, 11, 80), outline=(254, 240, 138, 180), width=4)
+        vs_draw.ellipse([26, 26, 194, 194], fill=(220, 38, 38, 255), outline=(254, 240, 138, 255), width=5)
+        vs_draw.text((110, 108), "VS", fill="#FEF08A", font=self.font_vs, anchor="mm", stroke_width=3, stroke_fill="#450A0A")
+        self.vs_badge_img = vs_base
+
     def _calculate_timeline(self):
         self.timeline_segments = []
         current_time = 0.0
@@ -252,28 +269,11 @@ class VideoComposer:
                 )
                 title_y += 65
                 
-            # 2. Product Comparison Cards
+            # 2. Product Name Tags (Cards & VS badge are rendered dynamically with motion in render_frame)
             card_y = 310
             card_a_x = 70
             card_b_x = 570
             
-            scale_a = 1.05 if highlight in ["A", "both"] else 1.0
-            scale_b = 1.05 if highlight in ["B", "both"] else 1.0
-            
-            if scale_a != 1.0:
-                sa = int(440 * scale_a)
-                img_a_draw = self.img_a.resize((sa, sa), Image.Resampling.BILINEAR)
-                frame.paste(img_a_draw, (card_a_x - (sa - 440) // 2, card_y - (sa - 440) // 2), img_a_draw)
-            else:
-                frame.paste(self.img_a, (card_a_x, card_y), self.img_a)
-                
-            if scale_b != 1.0:
-                sb = int(440 * scale_b)
-                img_b_draw = self.img_b.resize((sb, sb), Image.Resampling.BILINEAR)
-                frame.paste(img_b_draw, (card_b_x - (sb - 440) // 2, card_y - (sb - 440) // 2), img_b_draw)
-            else:
-                frame.paste(self.img_b, (card_b_x, card_y), self.img_b)
-                
             name_a = self.script_data.get("item_a", {}).get("name", "Bên A")
             name_b = self.script_data.get("item_b", {}).get("name", "Bên B")
             
@@ -284,12 +284,6 @@ class VideoComposer:
             tag_b_w = 400
             draw.rounded_rectangle([card_b_x + 20, card_y + 455, card_b_x + tag_b_w + 20, card_y + 510], radius=14, fill="#0F172A", outline="#FB7185", width=3)
             draw.text((card_b_x + 220, card_y + 482), name_b[:18], fill="#FB7185", font=self.font_tag, anchor="mm")
-            
-            # Pulsing VS Badge
-            vs_cx, vs_cy = WIDTH // 2, card_y + 220
-            draw.ellipse([vs_cx - 62, vs_cy - 62, vs_cx + 62, vs_cy + 62], fill=(245, 158, 11, 90))
-            draw.ellipse([vs_cx - 56, vs_cy - 56, vs_cx + 56, vs_cy + 56], fill="#DC2626", outline="#FEF08A", width=4)
-            draw.text((vs_cx, vs_cy), "VS", fill="#FEF08A", font=self.font_vs, anchor="mm")
 
             # 3. Subtitles with Stroke and Background Box
             sub_y_center = 965
@@ -337,8 +331,47 @@ class VideoComposer:
             
         frame = self.segment_base_frames[seg_idx].copy()
         
-        # Mascot pop-in & idle float
+        # Segment local time & highlight
         seg_t = max(0.0, t - active_seg.get("start_time", 0.0))
+        highlight = active_seg.get("highlight_item", "none")
+        
+        # 1. Dynamic Product Cards with Ken Burns breathing zoom
+        card_y = 310
+        card_a_x = 70
+        card_b_x = 570
+        card_cx_a = card_a_x + 220
+        card_cx_b = card_b_x + 220
+        card_cy = card_y + 220
+        
+        # Scale breathing oscillation for highlighted item
+        scale_a = (1.05 + 0.025 * math.sin(seg_t * 3.5)) if highlight in ["A", "both"] else 1.0
+        scale_b = (1.05 + 0.025 * math.sin(seg_t * 3.5)) if highlight in ["B", "both"] else 1.0
+        
+        # Draw Card A
+        if scale_a != 1.0:
+            sa = int(440 * scale_a)
+            img_a_draw = self.img_a.resize((sa, sa), Image.Resampling.BILINEAR)
+            pos_a = (card_cx_a - sa // 2, card_cy - sa // 2)
+            frame.paste(img_a_draw, pos_a, img_a_draw)
+        else:
+            frame.paste(self.img_a, (card_a_x, card_y), self.img_a)
+            
+        # Draw Card B
+        if scale_b != 1.0:
+            sb = int(440 * scale_b)
+            img_b_draw = self.img_b.resize((sb, sb), Image.Resampling.BILINEAR)
+            pos_b = (card_cx_b - sb // 2, card_cy - sb // 2)
+            frame.paste(img_b_draw, pos_b, img_b_draw)
+        else:
+            frame.paste(self.img_b, (card_b_x, card_y), self.img_b)
+            
+        # 2. Dynamic Pulsing Central VS Badge
+        vs_pulse = 1.0 + 0.07 * math.sin(t * 4.5)
+        vs_sz = int(140 * vs_pulse)
+        vs_draw = self.vs_badge_img.resize((vs_sz, vs_sz), Image.Resampling.BILINEAR)
+        frame.paste(vs_draw, (WIDTH // 2 - vs_sz // 2, card_cy - vs_sz // 2), vs_draw)
+        
+        # 3. Mascot pop-in & idle float
         pose = active_seg.get("pose", "pointing")
         mascot_img = self.mascot_imgs.get(pose, self.mascot_imgs.get("pointing"))
         
@@ -359,7 +392,7 @@ class VideoComposer:
             
         frame.paste(mascot_to_paste, (pos_x, pos_y), mascot_to_paste)
 
-        # Progress bar
+        # 4. Modern Bottom Progress bar
         draw = ImageDraw.Draw(frame)
         progress = min(1.0, max(0.0, t / self.total_duration))
         prog_w = int(WIDTH * progress)
@@ -371,6 +404,36 @@ class VideoComposer:
     def build_audio_track(self) -> CompositeAudioClip:
         audio_clips = []
         
+        # 1. Background Music (BGM) - soft Lo-Fi ambient music at 9% volume
+        bgm_candidates = list(BGM_DIR.glob("*.wav")) + list(BGM_DIR.glob("*.mp3"))
+        if not bgm_candidates:
+            try:
+                from asset_manager import generate_lofi_bgm
+                auto_bgm = generate_lofi_bgm()
+                if auto_bgm and os.path.exists(auto_bgm):
+                    bgm_candidates = [Path(auto_bgm)]
+            except Exception as e:
+                print(f"[VideoComposer] Warning: Could not auto-generate BGM: {e}")
+
+        if bgm_candidates:
+            try:
+                bgm_path = bgm_candidates[0]
+                bgm_raw = AudioFileClip(str(bgm_path))
+                if bgm_raw.duration < self.total_duration:
+                    repeats = math.ceil(self.total_duration / max(0.1, bgm_raw.duration))
+                    bgm_looped = concatenate_audioclips([bgm_raw] * repeats)
+                else:
+                    bgm_looped = bgm_raw
+                    
+                bgm_sub = subclip_audio(bgm_looped, 0, self.total_duration)
+                bgm_sub = set_clip_volume(bgm_sub, 0.09)
+                bgm_sub = set_clip_start(bgm_sub, 0.0)
+                audio_clips.append(bgm_sub)
+                print(f"[VideoComposer] Mixed BGM from {bgm_path.name} at 9% volume.")
+            except Exception as e:
+                print(f"[VideoComposer] Warning: Failed to mix BGM: {e}")
+
+        # 2. Voiceover & SFX clips
         for seg in self.timeline_segments:
             start_t = seg["start_time"]
             

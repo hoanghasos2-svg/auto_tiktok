@@ -3,6 +3,7 @@ import math
 import struct
 import wave
 from pathlib import Path
+from typing import Optional
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -10,13 +11,14 @@ ASSETS_DIR = BASE_DIR / "assets"
 BG_DIR = ASSETS_DIR / "backgrounds"
 MASCOT_DIR = ASSETS_DIR / "mascot"
 SFX_DIR = ASSETS_DIR / "sfx"
+BGM_DIR = ASSETS_DIR / "bgm"
 FONTS_DIR = ASSETS_DIR / "fonts"
 OUTPUT_DIR = BASE_DIR / "output"
 TEMP_DIR = BASE_DIR / "temp"
 
 def ensure_directories():
     """Ensure all required directories exist."""
-    for d in [BG_DIR, MASCOT_DIR, SFX_DIR, FONTS_DIR, OUTPUT_DIR, TEMP_DIR]:
+    for d in [BG_DIR, MASCOT_DIR, SFX_DIR, BGM_DIR, FONTS_DIR, OUTPUT_DIR, TEMP_DIR]:
         d.mkdir(parents=True, exist_ok=True)
 
 def create_default_background(filepath: Path, width=1080, height=1920):
@@ -234,6 +236,110 @@ def init_all_assets():
         if not pfile.exists():
             draw_cute_mascot(pose, pfile)
             
+    bgm_file = BGM_DIR / "bgm_chill.wav"
+    if not bgm_file.exists():
+        generate_lofi_bgm(bgm_file, duration=60.0)
+
+def generate_lofi_bgm(filepath: Optional[Path] = None, duration: float = 60.0, sample_rate: int = 44100) -> Path:
+    """Tạo nhạc nền Lofi Chill Acoustic êm dịu, bản quyền miễn phí 100% (Numpy siêu tốc)."""
+    if filepath is None:
+        ensure_directories()
+        filepath = BGM_DIR / "bgm_chill.wav"
+    else:
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+    import numpy as np
+    chords = [
+        [261.63, 329.63, 392.00, 493.88],  # Cmaj7
+        [220.00, 261.63, 329.63, 392.00],  # Am7
+        [293.66, 349.23, 440.00, 523.25],  # Dm7
+        [196.00, 246.94, 293.66, 349.23],  # G7
+    ]
+    chord_len = 3.2
+    total_samples = int(sample_rate * duration)
+    full_audio = np.zeros(total_samples, dtype=np.float32)
+
+    samples_per_chord = int(sample_rate * chord_len)
+    chord_t = np.linspace(0, chord_len, samples_per_chord, endpoint=False)
+    env = np.exp(-0.75 * chord_t) * np.minimum(1.0, chord_t * 15.0)
+
+    current_idx = 0
+    num_cycles = int(duration / (chord_len * len(chords))) + 1
+    for _ in range(num_cycles):
+        for chord in chords:
+            if current_idx >= total_samples:
+                break
+            chunk_len = min(samples_per_chord, total_samples - current_idx)
+            ct = chord_t[:chunk_len]
+            c_env = env[:chunk_len]
+            chunk = np.zeros(chunk_len, dtype=np.float32)
+            for freq in chord:
+                chunk += 0.45 * np.sin(2 * np.pi * freq * ct)
+                chunk += 0.15 * np.sin(2 * np.pi * (freq * 2) * ct)
+                chunk += 0.05 * np.sin(2 * np.pi * (freq * 3) * ct)
+            chunk = (chunk / len(chord)) * c_env
+            bass = 0.35 * np.sin(2 * np.pi * (chord[0] / 2) * ct) * c_env
+            full_audio[current_idx:current_idx + chunk_len] = (chunk + bass) * 0.45
+            current_idx += chunk_len
+
+    int_audio = (full_audio * 32767 * 0.8).clip(-32768, 32767).astype(np.int16)
+    with wave.open(str(filepath), 'wb') as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(int_audio.tobytes())
+    print(f"[AssetManager] Created Lofi BGM: {filepath.name}")
+    return filepath
+
+def download_vietnamese_font():
+    """Download Google Font BeVietnamPro designed specifically for Vietnamese diacritics."""
+    vn_font_file = FONTS_DIR / "BeVietnamPro-ExtraBold.ttf"
+    if vn_font_file.exists() and vn_font_file.stat().st_size > 10000:
+        return vn_font_file
+        
+    try:
+        import requests
+        url = "https://raw.githubusercontent.com/google/fonts/main/ofl/bevietnampro/BeVietnamPro-ExtraBold.ttf"
+        resp = requests.get(url, timeout=8)
+        if resp.status_code == 200 and len(resp.content) > 10000:
+            with open(vn_font_file, "wb") as f:
+                f.write(resp.content)
+            print(f"[AssetManager] Downloaded Vietnamese font: {vn_font_file.name}")
+            return vn_font_file
+    except Exception as e:
+        print(f"[AssetManager] BeVietnamPro download note: {e}")
+        
+    # Also check Montserrat
+    mont_file = FONTS_DIR / "Montserrat-Black.ttf"
+    if mont_file.exists():
+        return mont_file
+        
+    return vn_font_file
+
+def init_all_assets():
+    ensure_directories()
+    
+    bg_file = BG_DIR / "paper_bg.png"
+    if not bg_file.exists():
+        create_default_background(bg_file)
+        
+    # Check category backgrounds
+    from create_category_backgrounds import generate_all_backgrounds
+    if not (BG_DIR / "bg_tech.png").exists() or not (BG_DIR / "bg_food.png").exists():
+        generate_all_backgrounds()
+        
+    # Check category mascots
+    from create_category_mascots import generate_all_category_mascots
+    MASCOTS_DIR = ASSETS_DIR / "mascots"
+    if not (MASCOTS_DIR / "food" / "pointing.png").exists() or not (MASCOTS_DIR / "tech" / "pointing.png").exists():
+        generate_all_category_mascots()
+        
+    poses = ["pointing", "thinking", "chill", "cta"]
+    for pose in poses:
+        pfile = MASCOT_DIR / f"{pose}.png"
+        if not pfile.exists():
+            draw_cute_mascot(pose, pfile)
+            
     pop_wav = SFX_DIR / "pop.wav"
     pop_mp3 = SFX_DIR / "pop.mp3"
     if not pop_wav.exists() and not pop_mp3.exists():
@@ -244,6 +350,11 @@ def init_all_assets():
     if not whoosh_wav.exists() and not whoosh_mp3.exists():
         generate_sfx_whoosh(whoosh_wav)
         
+    # Check BGM
+    bgm_file = BGM_DIR / "bgm_chill.wav"
+    if not bgm_file.exists():
+        generate_lofi_bgm(bgm_file, duration=60.0)
+
     download_vietnamese_font()
     print("[AssetManager] All assets and category backgrounds verified and ready!")
 
