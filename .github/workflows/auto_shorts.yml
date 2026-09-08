@@ -1,11 +1,12 @@
-name: Auto TikTok Shorts Producer (2-Phase Autonomous Schedule)
+name: Auto TikTok Shorts Producer (3 Golden Hours / Day)
 
 on:
   schedule:
-    # 2 Khung Giờ Vàng Việt Nam (GMT+7):
-    # - Ca Trưa: 11:00 VN (04:00 UTC) -> Phase 1: Tạm nghỉ | Phase 2 (từ ngày 31): Đăng video #1
-    # - Ca Tối:  20:00 VN (13:00 UTC) -> Phase 1: Đăng video duy nhất trong ngày | Phase 2: Đăng video #2
-    - cron: '0 4,13 * * *'
+    # 3 Khung Giờ Vàng Việt Nam (GMT+7) - Khoảng cách an toàn >= 5.5 tiếng (Chuẩn chống spam TikTok):
+    # - Ca Sáng: 06:00 VN (23:00 UTC hôm trước) -> Đăng lúc 06:20 - 06:45 Sáng (Trọng tâm 06:30)
+    # - Ca Trưa: 12:00 VN (05:00 UTC)           -> Đăng lúc 12:20 - 12:45 Trưa
+    # - Ca Tối:  20:00 VN (13:00 UTC)           -> Đăng lúc 20:20 - 20:45 Tối
+    - cron: '0 23,5,13 * * *'
   workflow_dispatch:
     inputs:
       test_now:

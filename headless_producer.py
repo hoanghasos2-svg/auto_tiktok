@@ -49,18 +49,22 @@ def cleanup_temp_folder():
             pass
 
 # ==============================================================================
-# CẤU HÌNH LỊCH TRÌNH ĐĂNG BÀI 2 GIAI ĐOẠN TỰ ĐỘNG (HOÀN TOÀN TỰ HÀNH 100%)
-# - Giai đoạn 1 (Ngày 1 đến ngày 30): 1 video / ngày / kênh (Đăng lúc 20:00 VN)
-# - Giai đoạn 2 (Từ ngày 31 trở đi):  2 video / ngày / kênh (Đăng 11:00 & 20:00 VN)
+# CẤU HÌNH LỊCH TRÌNH 3 KHUNG GIỜ VÀNG VIỆT NAM (3 VIDEOS / NGÀY / KÊNH)
+# - Ca Sáng: 06:00 VN (23:00 UTC) -> Đăng lúc 06:20 - 06:45 Sáng (Trọng tâm 06:30)
+# - Ca Trưa: 12:00 VN (05:00 UTC) -> Đăng lúc 12:20 - 12:45 Trưa
+# - Ca Tối:  20:00 VN (13:00 UTC) -> Đăng lúc 20:20 - 20:45 Tối
+# Khoảng cách tối thiểu an toàn: 5.5h - 8h (100% Không vi phạm quy định spam TikTok)
 # ==============================================================================
 START_DATE = date(2026, 9, 8)
 VN_TZ = timezone(timedelta(hours=7))
 
 def get_posting_schedule_phase(now_vn: Optional[datetime] = None) -> Dict[str, Any]:
     """
-    Tự động tính toán ngày và giai đoạn đăng bài không cần can thiệp thủ công:
-    - Phase 1 (Day <= 30): 1 video/ngày/kênh (Chỉ chạy ca Tối 20:00 VN, bỏ qua ca Trưa)
-    - Phase 2 (Day >= 31): 2 video/ngày/kênh (Chạy cả ca Trưa 11:00 VN & Tối 20:00 VN)
+    Xác định khung giờ đăng bài trong ngày:
+    - Ca Sáng (06:30 VN): hour 5 -> 9
+    - Ca Trưa (12:00 VN): hour 10 -> 15
+    - Ca Tối  (20:00 VN): hour 16 -> 23 hoặc 0 -> 4
+    Mỗi ca sản xuất & đăng 1 video độc quyền cho mỗi kênh => 3 video/ngày/kênh.
     """
     if now_vn is None:
         now_vn = datetime.now(VN_TZ)
@@ -68,33 +72,22 @@ def get_posting_schedule_phase(now_vn: Optional[datetime] = None) -> Dict[str, A
     days_passed = (current_date - START_DATE).days
     day_number = max(1, days_passed + 1)
     
-    if day_number <= 30:
-        phase = 1
-        videos_per_day = 1
-        desc = f"Giai đoạn 1 (Ngày {day_number}/30): 1 video/ngày/kênh"
+    hour = now_vn.hour
+    if 5 <= hour < 10:
+        slot_name = "SÁNG (06:30 VN)"
+    elif 10 <= hour < 16:
+        slot_name = "TRƯA (12:00 VN)"
     else:
-        phase = 2
-        videos_per_day = 2
-        desc = f"Giai đoạn 2 (Ngày {day_number}): 2 video/ngày/kênh"
-        
-    # Ca Trưa: trước 16:00 VN (Cron 04:00 UTC = 11:00 VN)
-    # Ca Tối: từ 16:00 VN trở đi (Cron 13:00 UTC = 20:00 VN)
-    is_lunch_slot = now_vn.hour < 16
-    slot_name = "TRƯA (11:00 VN)" if is_lunch_slot else "TỐI (20:00 VN)"
+        slot_name = "TỐI (20:00 VN)"
 
-    # Quyết định ca này có đăng video hay nghỉ:
-    # Phase 1: Bỏ qua ca Trưa, chỉ chạy ca Tối
-    # Phase 2: Chạy cả ca Trưa và ca Tối
-    should_run = (phase == 2) or (not is_lunch_slot)
+    desc = f"Lịch 3 Khung Giờ Vàng (Ngày thứ {day_number} hoạt động) - 3 videos/ngày/kênh"
 
     return {
-        "phase": phase,
         "day_number": day_number,
-        "videos_per_day": videos_per_day,
+        "videos_per_day": 3,
         "description": desc,
-        "is_lunch_slot": is_lunch_slot,
         "slot_name": slot_name,
-        "should_run": should_run,
+        "should_run": True,
         "now_vn": now_vn
     }
 
