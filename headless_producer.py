@@ -271,17 +271,22 @@ def produce_single_video_for_channel(
         print(f"[LỖI] Render video cho kênh {channel_name} thất bại.")
         return False
 
-    # Ghi nhận lịch sử chống trùng lặp gắn liền với kênh
-    script_manager.mark_script_as_used(script, out_video_path, channel_id=channel_id, channel_name=channel_name)
+    # 6. Tự động sinh Caption, Mô tả ngữ nghĩa & Bộ Hashtag đa tầng chuẩn TikTok SEO 2026
+    seo_data = script_manager.generate_tiktok_seo(script)
+    caption = seo_data["full_caption"]
+    print(f"\n[TikTok SEO 2026] Caption & Hashtag chuẩn ngách cho [{channel_name}]:")
+    print(caption)
+    print("-" * 50)
+
+    # Ghi nhận lịch sử chống trùng lặp gắn liền với kênh kèm SEO Caption
+    script_manager.mark_script_as_used(script, out_video_path, channel_id=channel_id, channel_name=channel_name, caption=caption)
     print(f"-> Ghi nhận kịch bản cho kênh {channel_name}. Tổng kho lịch sử: {script_manager.get_used_count()}")
 
-    # 6. Đăng DUY NHẤT lên 1 kênh này
+    # 7. Đăng DUY NHẤT lên 1 kênh này
     if buffer_token:
         try:
             print(f"[BufferService] Tải video lên host trung gian cho kênh {channel_name}...")
             public_video_url = buffer_service.upload_to_catbox(out_video_path)
-            
-            caption = f"{script['title']}\n\nTheo bạn bên nào đỉnh hơn? Bình luận ngay nhé!\n#shorts #tiktok #sosanh #xuhuong #trending #fyp"
 
             if is_test_now:
                 print(f"[BufferService] ⚡ TEST_NOW: Đăng ngay lập tức lên duy nhất kênh [{channel_name}]!")

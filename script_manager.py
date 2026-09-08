@@ -2,6 +2,8 @@ import os
 import json
 import time
 import re
+import random
+import unicodedata
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -182,7 +184,114 @@ def is_duplicate(title: str, name_a: str, name_b: str, category: Optional[str] =
                 
     return False
 
-def mark_script_as_used(script: Dict[str, Any], video_path: str, channel_id: str = "", channel_name: str = ""):
+def slugify_hashtag(text: str) -> str:
+    """Chuyển đổi tên đối tượng tiếng Việt thành hashtag chuẩn không dấu (VD: 'Cà Phê Muối' -> '#caphemuoi')."""
+    if not text:
+        return ""
+    text = text.replace("đ", "d").replace("Đ", "d")
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = re.sub(r"[^a-zA-Z0-9]", "", text).lower()
+    return f"#{text}" if text else ""
+
+def generate_tiktok_seo(script: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Tự động sản sinh Caption, Đoạn văn ngữ nghĩa (Semantic Description), Câu hỏi kích thích tranh cãi (Debate Hook)
+    và Bộ Hashtag đa tầng (Entity + Niche + Format) đạt chuẩn TikTok SEO năm 2026.
+    """
+    title = script.get("title", "KÈO ĐẤU SO SÁNH").strip()
+    cat = (script.get("category") or "").lower()
+    angle = (script.get("angle") or "toàn diện").strip()
+    
+    item_a = script.get("item_a", {})
+    item_b = script.get("item_b", {})
+    name_a = (item_a.get("name") if isinstance(item_a, dict) else str(item_a)).strip() or "Bên A"
+    name_b = (item_b.get("name") if isinstance(item_b, dict) else str(item_b)).strip() or "Bên B"
+    
+    # 1. Thẻ thực thể cụ thể (Entity Tags - Trọng tâm tìm kiếm của thuật toán TikTok)
+    tag_a = slugify_hashtag(name_a)
+    tag_b = slugify_hashtag(name_b)
+    entity_tags = [t for t in [tag_a, tag_b] if t and len(t) > 2]
+    
+    # 2. Thẻ ngách ngành & Câu hỏi phân cực chia phe (Polarizing Debate Hooks)
+    niche_tags = []
+    if any(k in cat for k in ["ẩm thực", "món", "ăn", "uống", "cà phê", "nấu", "food"]):
+        niche_tags = ["#amthuc", "#foodtiktok", "#reviewanngon", "#monngon"]
+        debate_hooks = [
+            f"Nếu chỉ được chọn 1 món duy nhất để thưởng thức, bạn chọn {name_a} hay {name_b}?",
+            f"Team {name_a} hay Team {name_b}? Bình luận điểm danh xem phe nào đông hơn!",
+            f"Theo khẩu vị của bạn, bên nào mới thực sự là 'chân ái'? Để lại góc nhìn bên dưới nhé!"
+        ]
+    elif any(k in cat for k in ["công nghệ", "điện thoại", "laptop", "máy tính", "apple", "samsung", "ai", "tech"]):
+        niche_tags = ["#congnghe", "#tech", "#reviewcongnghe", "#smartphone"]
+        debate_hooks = [
+            f"Nếu được chọn 1 trong 2 máy để dùng 5 năm tới, bạn chọn {name_a} hay {name_b}?",
+            f"Bỏ qua yếu tố thương hiệu, theo bạn bên nào mới thực sự 'đáng tiền' hơn?",
+            f"Team {name_a} hay Team {name_b}? Bình luận công tâm xem ai vượt trội hơn nhé!"
+        ]
+    elif any(k in cat for k in ["thú cưng", "chó", "mèo", "động vật", "pet"]):
+        niche_tags = ["#thucung", "#petsoftiktok", "#chomeo", "#yeudongvat"]
+        debate_hooks = [
+            f"Nuôi {name_a} hay {name_b} sẽ quấn chủ và tình cảm hơn? Bạn về phe nào?",
+            f"Bạn thuộc hội yêu thích bé cưng nào? Bình luận khoe kinh nghiệm thực tế nhé!",
+            f"Nếu được đón 1 bé về nhà ngay hôm nay, bạn chọn {name_a} hay {name_b}?"
+        ]
+    elif any(k in cat for k in ["tài chính", "tiền", "tiết kiệm", "đầu tư", "chi tiêu", "giàu"]):
+        niche_tags = ["#taichinh", "#quanlytaichinh", "#dautu", "#kiemtien"]
+        debate_hooks = [
+            f"Ở góc nhìn quản lý tài chính thông minh, bạn chọn hướng đi của {name_a} hay {name_b}?",
+            f"Liệu quyết định nào sẽ giúp bạn an tâm tài chính lâu dài hơn? Chia sẻ góc nhìn nhé!",
+            f"Quan điểm của bạn thế nào: Đứng về phía {name_a} hay {name_b}?"
+        ]
+    elif any(k in cat for k in ["công sở", "đi làm", "việc", "sếp", "đồng nghiệp", "tâm lý"]):
+        niche_tags = ["#congso", "#dilam", "#chuyencongso", "#tamly"]
+        debate_hooks = [
+            f"Trong môi trường làm việc thực tế, bạn đồng tình với {name_a} hay {name_b}?",
+            f"Theo bạn, tư duy nào mới giúp sự nghiệp thăng tiến bền vững hơn?",
+            f"Bạn thuộc tuýp người của {name_a} hay {name_b}? Bình luận chia sẻ nhé!"
+        ]
+    elif any(k in cat for k in ["xe", "ô tô", "xe máy", "vinfast"]):
+        niche_tags = ["#xehay", "#danhgiaxe", "#oto", "#xemay"]
+        debate_hooks = [
+            f"Với nhu cầu đi lại thực tế hàng ngày, bạn sẽ xuống tiền cho {name_a} hay {name_b}?",
+            f"Bên nào mang lại cảm giác lái và độ kinh tế vượt trội hơn? Để lại đánh giá nhé!"
+        ]
+    else:
+        niche_tags = ["#kienthuc", "#meovat", "#suthat", "#gocnhin"]
+        debate_hooks = [
+            f"Nhiều người vẫn đang phân vân giữa {name_a} và {name_b}. Còn bạn, bạn chọn phe nào?",
+            f"Góc nhìn của bạn thế nào? Để lại bình luận công tâm bên dưới nhé!",
+            f"Nếu phải đưa ra lựa chọn ngay lúc này, bạn sẽ nghiêng về bên nào?"
+        ]
+
+    # 3. Thẻ định dạng & Khám phá xu hướng (Format & Discovery Tags)
+    format_tags = ["#sosanh", "#doidau", "#learnontiktok", "#xuhuong"]
+
+    # Tổng hợp 6-7 tags chuẩn SEO không trùng lặp
+    all_tags = []
+    for t in entity_tags + niche_tags[:2] + format_tags[:2]:
+        if t and t not in all_tags:
+            all_tags.append(t)
+    hashtag_line = " ".join(all_tags[:7])
+
+    # 4. Đoạn văn ngữ nghĩa (Semantic Description) tối ưu cho thanh tìm kiếm TikTok Search
+    semantic_desc = f"So sánh đối đầu chi tiết giữa {name_a} và {name_b} về {angle.lower()}. Khám phá ưu nhược điểm thực tế để tìm ra lựa chọn tối ưu nhất dành cho bạn!"
+
+    # 5. Câu hỏi kích hoạt tranh luận
+    debate_hook = random.choice(debate_hooks)
+
+    # 6. Ghép thành Caption hoàn chỉnh chuẩn SEO TikTok 2026
+    full_caption = f"⚖️ {title}\n\n{semantic_desc}\n\n👉 {debate_hook}\n\n{hashtag_line}"
+
+    return {
+        "full_caption": full_caption,
+        "hashtags": all_tags,
+        "hashtag_line": hashtag_line,
+        "semantic_desc": semantic_desc,
+        "debate_hook": debate_hook
+    }
+
+def mark_script_as_used(script: Dict[str, Any], video_path: str, channel_id: str = "", channel_name: str = "", caption: str = ""):
     """Permanently record completed script in used history to ensure zero duplication."""
     used = _load_used_history()
     item_a_name = script.get("item_a", {}).get("name") if isinstance(script.get("item_a"), dict) else str(script.get("item_a", "Bên A"))
@@ -198,6 +307,7 @@ def mark_script_as_used(script: Dict[str, Any], video_path: str, channel_id: str
         "channel_id": channel_id,
         "channel_name": channel_name,
         "video_path": video_path,
+        "caption": caption,
         "rendered_at": time.strftime("%Y-%m-%d %H:%M:%S")
     }
     used.append(record)
