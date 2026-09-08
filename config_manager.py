@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 from pathlib import Path
 
@@ -15,7 +15,8 @@ DEFAULT_CONFIG = {
     "font_name": "Montserrat-Black.ttf",
     "fps": 30,
     "video_width": 1080,
-    "video_height": 1920
+    "video_height": 1920,
+    "pexels_api_key": ""
 }
 
 def load_config() -> dict:

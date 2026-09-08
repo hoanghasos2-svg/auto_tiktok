@@ -147,7 +147,8 @@ def produce_single_video_for_channel(
     buffer_token: str,
     is_test_now: bool,
     index: int = 1,
-    total: int = 1
+    total: int = 1,
+    pexels_api_key: str = ""
 ):
     channel_id = channel_info["id"]
     channel_name = channel_info.get("name", f"Channel_{channel_id}")
@@ -219,14 +220,16 @@ def produce_single_video_for_channel(
         img_a_path,
         item_label="A",
         display_name=script["item_a"].get("name", ""),
-        query_en=script["item_a"].get("search_query_en", "")
+        query_en=script["item_a"].get("search_query_en", ""),
+        pexels_api_key=pexels_api_key
     )
     image_service.search_and_download_image(
         script["item_b"].get("search_query", ""),
         img_b_path,
         item_label="B",
         display_name=script["item_b"].get("name", ""),
-        query_en=script["item_b"].get("search_query_en", "")
+        query_en=script["item_b"].get("search_query_en", ""),
+        pexels_api_key=pexels_api_key
     )
 
     # 4. Sinh giọng đọc Edge-TTS
@@ -336,10 +339,16 @@ def run_headless_pipeline():
     cfg = config_manager.load_config()
     gemini_key = os.environ.get("GEMINI_API_KEY", "").strip() or cfg.get("gemini_api_key", "").strip()
     buffer_token = os.environ.get("BUFFER_TOKEN", "").strip() or cfg.get("buffer_access_token", "").strip()
+    pexels_key = os.environ.get("PEXELS_API_KEY", "").strip() or cfg.get("pexels_api_key", "").strip()
 
     if not gemini_key:
         print("[LỖI] Thiếu GEMINI_API_KEY. Vui lòng cấu hình trong GitHub Secrets hoặc config.json.")
         sys.exit(1)
+
+    if pexels_key:
+        print("🖼️ Pexels API: Đã kích hoạt (Ưu tiên tìm ảnh chuẩn xác từ kho Pexels)!")
+    else:
+        print("ℹ️ Pexels API: Chưa có PEXELS_API_KEY (Sử dụng hệ thống tìm kiếm đa tầng dự phòng)")
 
     # 1. Khởi tạo tài nguyên hệ thống
     print("[1/2] Kiểm tra tài nguyên đồ họa/font...")
@@ -374,7 +383,8 @@ def run_headless_pipeline():
                     buffer_token=ch.get("token", ""),
                     is_test_now=is_test_now,
                     index=idx,
-                    total=len(all_channels)
+                    total=len(all_channels),
+                    pexels_api_key=pexels_key
                 )
             except Exception as ch_err:
                 print(f"[LỖI KÊNH {ch.get('name', 'N/A')}] Xảy ra lỗi khi sản xuất: {ch_err}. Tự động bỏ qua để xử lý kênh tiếp theo!")
@@ -387,7 +397,8 @@ def run_headless_pipeline():
             buffer_token="",
             is_test_now=True,
             index=1,
-            total=1
+            total=1,
+            pexels_api_key=pexels_key
         )
 
     print("\n" + "=" * 65)

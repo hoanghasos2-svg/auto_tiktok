@@ -325,18 +325,84 @@ def search_unsplash_image(query: str) -> Optional[bytes]:
         pass
     return None
 
+def search_pexels_image(query: str, api_key: str) -> Optional[bytes]:
+    """
+    Ưu tiên số 1: Pexels Official API (Kho ảnh bản quyền miễn phí 100%, chất lượng studio cao cấp).
+    Endpoint: https://api.pexels.com/v1/search
+    """
+    if not api_key:
+        return None
+    try:
+        clean_q = re.sub(r"[^\w\s\-]", " ", query).strip()
+        if not clean_q:
+            return None
+        
+        url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(clean_q)}&per_page=5"
+        headers = {
+            "Authorization": api_key,
+            "User-Agent": USER_AGENT
+        }
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            photos = data.get("photos", [])
+            for photo in photos:
+                srcs = photo.get("src", {})
+                # Chọn độ phân giải lớn, sắc nét nhất để crop vuông 480x480
+                img_url = srcs.get("large") or srcs.get("large2x") or srcs.get("medium") or srcs.get("original")
+                if img_url:
+                    img_resp = requests.get(img_url, headers=headers, timeout=12)
+                    if img_resp.status_code == 200 and len(img_resp.content) > 5000:
+                        return img_resp.content
+        elif resp.status_code == 401:
+            print("[ImageService] [Pexels API] Lỗi 401: API Key không hợp lệ hoặc đã hết hạn.")
+        elif resp.status_code == 429:
+            print("[ImageService] [Pexels API] Lỗi 429: Vượt quá giới hạn lượt gọi Pexels API (Rate limit).")
+    except Exception as ex:
+        print(f"[ImageService] [Pexels API Lỗi]: {ex}")
+    return None
+
 def search_and_download_image(
     query: str,
     output_path: str,
     item_label: str = "A",
     display_name: str = "",
-    query_en: str = ""
+    query_en: str = "",
+    pexels_api_key: str = ""
 ) -> str:
-    """Download real product/topic photo with resilient multi-tier fallback."""
+    """Download real product/topic photo with Pexels API priority + resilient multi-tier fallback."""
     border_color = "#38BDF8" if item_label == "A" else "#FB7185"
     variations = clean_query_variations(query, display_name, query_en)
     target_label = display_name if display_name else query
     
+    # 0. Xác định Pexels API Key
+    if not pexels_api_key:
+        pexels_api_key = os.environ.get("PEXELS_API_KEY", "").strip()
+    if not pexels_api_key:
+        try:
+            import config_manager
+            pexels_api_key = config_manager.load_config().get("pexels_api_key", "").strip()
+        except Exception:
+            pass
+
+    # Tier 0 (ƯU TIÊN SỐ 1 TUYỆT ĐỐI): Pexels Official API
+    if pexels_api_key:
+        print(f"[ImageService] [Tier 1 Pexels API] Đang tìm ảnh chuẩn xác trên Pexels cho: '{target_label}'...")
+        for q_var in variations:
+            pexels_bytes = search_pexels_image(q_var, pexels_api_key)
+            if pexels_bytes:
+                if process_and_crop_square(
+                    pexels_bytes,
+                    output_path,
+                    target_size=(480, 480),
+                    border_color=border_color
+                ):
+                    print(f"[ImageService] ✅ Tìm thấy ảnh Pexels chuẩn xác cho '{q_var}': {output_path}")
+                    return output_path
+        print(f"[ImageService] Pexels không tìm thấy ảnh phù hợp cho '{target_label}'. Chuyển sang engine dự phòng...")
+    else:
+        print(f"[ImageService] (Chưa cấu hình PEXELS_API_KEY. Dùng các nguồn tìm kiếm mở dự phòng)")
+
     # Tier 1: DuckDuckGo Search
     if DDGS_AVAILABLE:
         for q_var in variations:

@@ -53,6 +53,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BUFFER_TOKEN: ${{ secrets.BUFFER_TOKEN }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           TEST_NOW: ${{ github.event.inputs.test_now || 'false' }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
